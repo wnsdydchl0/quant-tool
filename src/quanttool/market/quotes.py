@@ -67,6 +67,16 @@ class UstParCsvLoader(Loader):
             paths = [paths]
         self._paths = [Path(p) for p in paths]
 
+    def dates(self) -> list[date]:
+        """파일에 있는 날짜 (오름차순)."""
+        out: set[date] = set()
+        for path in self._paths:
+            with path.open(newline="", encoding="utf-8-sig") as f:
+                out.update(
+                    datetime.strptime(r["Date"], "%m/%d/%Y").date() for r in csv.DictReader(f)
+                )
+        return sorted(out)
+
     def load(self, asof: date) -> list[MarketQuote]:
         out: list[MarketQuote] = []
         for path in self._paths:

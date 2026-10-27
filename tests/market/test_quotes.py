@@ -13,6 +13,7 @@ def test_ust_csv_loader(loader):
     assert quotes["UST/PAR/10Y"] == pytest.approx(0.0398)
     assert quotes["UST/PAR/6W"] == pytest.approx(0.0400)
     assert loader.load(date(2026, 1, 1)) == []
+    assert loader.dates() == [date(2026, 10, 22), ASOF]
 
 
 def test_in_memory_loader_filters_by_date():
