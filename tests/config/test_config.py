@@ -19,7 +19,7 @@ def test_load_repo_configs():
     assert ust.quote_ids()[-1] == "UST/PAR/30Y"
     assert cfg.conventions["UST"].settlement_days == 1
     assert cfg.pricing["FixedBond"].engine == "DiscountingBond"
-    assert cfg.grid.root["UST"].tenors[0] == "3M"
+    assert cfg.grid.root["UST"].tenors[0] == "1M"
     assert cfg.sensitivity.key_rate_bp == 1.0
 
 
