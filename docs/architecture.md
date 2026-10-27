@@ -359,6 +359,8 @@ Autocallable:  {model: LocalVol,     engine: MonteCarlo, params: {paths: 100000}
 | 시나리오 시장 방식 | 원래 시세 bump vs ORE식 격자 재표현 | **격자 재표현으로 결정** (PCA·과거 재현과 좌표 일치, 속도, vol 지역성) |
 | 금리 데이터 | 스왑 커브 무료 데이터 없음 | 국채 + SOFR 선물 OIS 근사, 한계를 docs에 명시 |
 | 듀얼 커브 (KRW) | CD 프로젝션 vs 할인 커브 | 구조는 지원, 데이터 확보 시 활성화 |
+| UST par 헬퍼 관례 | par yield = 쿠폰인 가상 채권의 가격이 정확히 100이어야 함 | 명목 만기(조정 없음) 정규 일정 + Unadjusted 지급(수익률 관례). bill(≤1Y)은 BEY(Act/365, 반년 초과 시 반기복리 1회) → 할인채 가격. 쿠폰은 구축 시점에 고정, 이후 수익률 변화는 DerivedQuote로 가격에 전달 (`market/rates.py`) |
+| 실제 UST 데이터 | 이 클라우드 환경에서 home.treasury.gov 접근 차단 | 테스트는 형식만 같은 합성 샘플(`tests/fixtures/`), 실데이터 수집은 `pipeline/`에서 |
 
 ---
 

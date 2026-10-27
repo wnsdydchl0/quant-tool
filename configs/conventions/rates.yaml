@@ -6,4 +6,4 @@ UST:
   settlement_days: 1
   frequency: Semiannual
   business_day_convention: Unadjusted  # 쿠폰 일정
-  payment_convention: Following
+  payment_convention: Unadjusted       # 수익률 관례: 명목 쿠폰일로 할인 (주말 지급 지연 무시)
