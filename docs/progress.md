@@ -15,12 +15,14 @@ python pipeline/ust_par.py 2026                          # 재무부 par yield �
 ```
 
 - `pytest`는 `python -m pytest`로 돌린다. PATH의 `pytest`가 다른 환경(QuantLib 없음)을 가리킬 수 있다.
+- 처음이면 `notebooks/tutorial/`(00~04)을 순서대로 실행하며 코드 위치를 따라간다.
 - 노트북 `notebooks/01_ust_curve.ipynb`는 `data/ust_par/*.csv`가 있으면 실제 데이터를, 없으면 합성 샘플을 쓰고 경고를 띄운다.
 
 ## 완료
 
 - Phase 0: 문서 분할(`docs/architecture.md`, `docs/references/`), CLAUDE.md, 패키지 골격, 의존 방향 테스트.
 - Phase 1 첫 줄기 (UST 커브 → 국채 → key rate DV01): core, config, market, derivatives, scenario, analytics, 노트북.
+- 튜토리얼 노트북 5개 (`notebooks/tutorial/`): QuantLib 기초 → 시세→커브 → Snapshot 내부 → 계약서→NPV → 시나리오.
 - 테스트 81개 통과. 완료 기준 (합성 샘플 `tests/fixtures/ust_par_sample.csv` 기준, 실제 시장 값 아님):
 
 | 기준 | 결과 |
