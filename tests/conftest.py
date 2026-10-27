@@ -6,7 +6,7 @@ import pytest
 from quanttool.config import load_config
 from quanttool.market import Snapshot, UstParCsvLoader
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 ASOF = date(2026, 10, 23)
 
 
@@ -23,3 +23,10 @@ def loader():
 @pytest.fixture
 def snap(cfg, loader):
     return Snapshot.build(ASOF, cfg, loader)
+
+
+@pytest.fixture
+def portfolio():
+    from quanttool.derivatives import Portfolio
+
+    return Portfolio.load(ROOT / "positions" / "ust_book.yaml")
