@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "quanttool"
 version = "0.0.1"
 description = "QuantLib 기반, ORE 구조를 참조한 가격결정·리스크 분석 툴"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "QuantLib==1.44",
