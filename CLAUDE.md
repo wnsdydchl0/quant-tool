@@ -1,9 +1,9 @@
 # QuantTool
-- 작업 현황·로컬 시작 방법·다음 단계는 docs/progress.md, 시장 데이터 출처는 docs/data_sources.md.
-- 구조와 원칙은 docs/architecture.md를 따른다. 새 모듈은 2장 원칙과 6.4 불변 조건을 지킨다.
+- 설계 기준·데이터 출처·진행 현황·다음 단계는 모두 docs/architecture.md 한 문서에 있다 (3장이 현황).
+- 구조와 원칙은 docs/architecture.md를 따른다. 새 모듈은 2.1 설계 원칙과 2.3 불변 조건을 지킨다.
 - 의존 방향: config·core → market → derivatives → scenario → analytics. 역방향 import 금지 (tests/test_layering.py가 검사).
 - QuantLib API는 추측하지 말고 references/QuantLib-SWIG 또는 dir()/help()로 확인 후 사용.
-- ORE 설계를 참조할 때는 references/Engine 원본을 확인하고 파일 경로를 남긴다. 요약은 docs/references/.
+- ORE 설계를 참조할 때는 references/Engine 원본을 확인하고 파일 경로를 남긴다. 요약은 docs/architecture.md 0.2.
 - references/는 gitignore 대상이다. 없으면 `scripts/fetch_references.sh`로 클론한다.
 - 모든 기능은 tests/에 QuantLib 직접 계산 또는 해석해와 비교하는 테스트를 함께 작성한다.
 - 작업 단위는 작게: 모듈 하나, 테스트 통과, diff 리뷰 후 커밋.

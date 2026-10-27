@@ -5,7 +5,7 @@
 
 | 노트북 | 배우는 것 | 주로 보는 코드 |
 |---|---|---|
-| `00_quantlib_basics` | SimpleQuote, Handle, Observer, RelinkableHandle, 전역 평가일 — QuantLib만으로 | `docs/references/quantlib.md` |
+| `00_quantlib_basics` | SimpleQuote, Handle, Observer, RelinkableHandle, 전역 평가일 — QuantLib만으로 | `docs/architecture.md` 0.1 |
 | `01_quotes_to_curve` | 재무부 par yield → 헬퍼 → 부트스트랩을 손으로, 그다음 `Snapshot.build`와 비교 | `src/quanttool/market/rates.py` |
 | `02_snapshot_step_by_step` | 레시피 → Loader → QuoteStore → 빌더 → 의존 그래프 → 보관소, 한 줄씩 | `src/quanttool/market/market.py`, `config/`, `core/` |
 | `03_trade_to_npv` | 계약서(YAML) → EngineFactory → 엔진 → NPV, QuantLib 직접 계산과 비교 | `src/quanttool/derivatives/` |

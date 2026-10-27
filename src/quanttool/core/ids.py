@@ -1,6 +1,7 @@
 """이름 규칙: 시세 id, 리스크 요인 키, 단위.
 
-모든 시장 입력은 id가 붙은 SimpleQuote이고 (docs/architecture.md 6.4), id 형식은 여기서만 정한다.
+모든 시장 입력은 id가 붙은 SimpleQuote이고 (docs/architecture.md 2.3 불변 조건),
+id 형식은 여기서만 정한다.
 """
 
 from __future__ import annotations
