@@ -1,4 +1,5 @@
 # QuantTool
+- 작업 현황·로컬 시작 방법·다음 단계는 docs/progress.md, 시장 데이터 출처는 docs/data_sources.md.
 - 구조와 원칙은 docs/architecture.md를 따른다. 새 모듈은 2장 원칙과 6.4 불변 조건을 지킨다.
 - 의존 방향: config·core → market → derivatives → scenario → analytics. 역방향 import 금지 (tests/test_layering.py가 검사).
 - QuantLib API는 추측하지 말고 references/QuantLib-SWIG 또는 dir()/help()로 확인 후 사용.
