@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quanttool"
+version = "0.0.1"
+description = "QuantLib 기반, ORE 구조를 참조한 가격결정·리스크 분석 툴"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "QuantLib==1.44",
+    "pydantic>=2",
+    "pyyaml>=6",
+    "pandas>=2",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["docs", "references"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
