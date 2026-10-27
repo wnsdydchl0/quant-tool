@@ -7,6 +7,6 @@ QuantLib을 엔진으로 쓰고 ORE(Open Source Risk Engine)의 시스템 설계
 
 ```bash
 pip install -e .[dev]
-pytest -q && ruff check .
+python -m pytest -q && ruff check .
 scripts/fetch_references.sh   # QuantLib-SWIG, ORE 원본 클론 (선택)
 ```

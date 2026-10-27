@@ -1,0 +1,2 @@
+# Snapshot.build가 구축할 대상 (ORE todaysmarket.xml 대응)
+yield_curves: [UST]

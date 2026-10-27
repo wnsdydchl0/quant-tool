@@ -1,0 +1,3 @@
+# 민감도 이동 크기 (bp, ORE sensitivity.xml 대응)
+key_rate_bp: 1.0
+parallel_bp: 1.0

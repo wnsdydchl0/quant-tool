@@ -7,4 +7,4 @@
 - 모든 기능은 tests/에 QuantLib 직접 계산 또는 해석해와 비교하는 테스트를 함께 작성한다.
 - 작업 단위는 작게: 모듈 하나, 테스트 통과, diff 리뷰 후 커밋.
 - 설정 값은 configs/, 추정값은 configs/estimated/(출처 필수). 코드에 상수로 넣지 않는다.
-- 검사: `pytest -q && ruff check .`
+- 검사: `python -m pytest -q && ruff check . && ruff format --check .`

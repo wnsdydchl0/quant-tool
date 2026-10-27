@@ -1,0 +1,13 @@
+# 미 재무부 Daily Par Yield Curve로 만드는 국채 할인 커브
+name: UST
+type: YieldCurve
+currency: USD
+conventions: UST
+segments:
+  # 1M~1Y: bill, bond-equivalent yield → 할인채 가격
+  - {type: ZeroCouponBill, quote_family: UST, quote_field: PAR,
+     tenors: [1M, 2M, 3M, 4M, 6M, 1Y]}
+  # 2Y~30Y: par yield = 쿠폰, 가격 100인 가상 채권
+  - {type: FixedRateBond, quote_family: UST, quote_field: PAR,
+     tenors: [2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y]}
+interpolation: LogCubic(Discount)
