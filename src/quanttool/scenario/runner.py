@@ -1,7 +1,7 @@
 """시나리오 실행. ORE 대응: OREAnalytics/orea/engine/valuationengine.hpp.
 
 포트폴리오는 한 번 조립하고, 시나리오마다 apply → npv → reset 한다
-(docs/architecture.md 2.3 불변 조건).
+(docs/architecture.md 1.7 불변 조건).
 """
 
 from __future__ import annotations

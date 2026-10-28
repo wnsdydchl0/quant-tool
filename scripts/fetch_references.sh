@@ -5,3 +5,4 @@ cd "$(dirname "$0")/.."
 mkdir -p references
 [ -d references/QuantLib-SWIG ] || git clone --depth 1 https://github.com/lballabio/QuantLib-SWIG.git references/QuantLib-SWIG
 [ -d references/Engine ] || git clone --depth 1 https://github.com/OpenSourceRisk/Engine.git references/Engine
+[ -d references/ORE-SWIG ] || git clone --depth 1 https://github.com/OpenSourceRisk/ORE-SWIG.git references/ORE-SWIG

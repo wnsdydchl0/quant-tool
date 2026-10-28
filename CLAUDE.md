@@ -1,6 +1,6 @@
 # QuantTool
-- 설계 기준·데이터 출처·진행 현황·다음 단계는 모두 docs/architecture.md 한 문서에 있다 (3장이 현황).
-- 구조와 원칙은 docs/architecture.md를 따른다. 새 모듈은 2.1 설계 원칙과 2.3 불변 조건을 지킨다.
+- 설계 기준·진행 현황·다음 단계는 docs/architecture.md (0 레퍼런스, 1 패키지 구조, 2 진행). 데이터 수집·저장 설계는 docs/data_platform.md.
+- 구조와 원칙은 docs/architecture.md를 따른다. 새 모듈은 1.5 설계 원칙과 1.7 불변 조건을 지킨다.
 - 의존 방향: config·core → market → derivatives → scenario → analytics. 역방향 import 금지 (tests/test_layering.py가 검사).
 - QuantLib API는 추측하지 말고 references/QuantLib-SWIG 또는 dir()/help()로 확인 후 사용.
 - ORE 설계를 참조할 때는 references/Engine 원본을 확인하고 파일 경로를 남긴다. 요약은 docs/architecture.md 0.2.
