@@ -1,6 +1,6 @@
 """의존 방향 검사: config·core → market → derivatives → scenario → analytics.
 
-아래 층은 위 층을 import하지 않는다 (docs/architecture.md 2.1 원칙 8).
+아래 층은 위 층을 import하지 않는다 (docs/architecture.md 1.5 원칙 8).
 """
 
 import ast
