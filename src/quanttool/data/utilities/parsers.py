@@ -72,6 +72,17 @@ def business_day_convention(name: str) -> int:
     return _lookup(_BDCS, "business day convention", name)
 
 
+_DATE_GENERATION = {
+    "Backward": ql.DateGeneration.Backward,
+    "Forward": ql.DateGeneration.Forward,
+    "Zero": ql.DateGeneration.Zero,
+}
+
+
+def date_generation(name: str) -> int:
+    return _lookup(_DATE_GENERATION, "date generation rule", name)
+
+
 def period(text: str) -> ql.Period:
     return ql.Period(text)
 

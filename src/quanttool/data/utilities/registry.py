@@ -37,4 +37,5 @@ class Registry:
 
 BUILDERS = Registry("market builders")  # 시장 객체 유형 → MarketBuilder
 TRADES = Registry("trades")  # trade_type → Trade
-ENGINE_BUILDERS = Registry("engine builders")  # 엔진 이름 → EngineBuilder
+ENGINE_BUILDERS = Registry("engine builders")  # "model/engine" → EngineBuilder
+LEG_BUILDERS = Registry("leg builders")  # leg_type → LegBuilder

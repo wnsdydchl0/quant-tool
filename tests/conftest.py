@@ -35,4 +35,4 @@ def linked_snap(cfg, loader):
 def portfolio():
     from quanttool.data.portfolio import Portfolio
 
-    return Portfolio.load(ROOT / "positions" / "ust_book.yaml")
+    return Portfolio.from_file(ROOT / "positions" / "ust_book.yaml")

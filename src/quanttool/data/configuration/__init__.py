@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from .conventions import Conventions, InstrumentConventions, RateConventions
 from .curveconfig import YieldCurveConfig
 from .curvespec import CurveSpec, YieldCurveSpec, parse_curve_spec
-from .enginedata import EngineData, EngineSpec
+from .enginedata import EngineData, ProductEngineSpec
 from .simmarketparameters import (
     ScenarioSimMarketParameters,
     SensitivityScenarioData,
@@ -34,8 +34,8 @@ __all__ = [
     "InstrumentConventions",
     "MarketConfiguration",
     "MarketObject",
+    "ProductEngineSpec",
     "EngineData",
-    "EngineSpec",
     "RateConventions",
     "ScenarioSimMarketParameters",
     "SensitivityScenarioData",
@@ -54,7 +54,7 @@ class Config(BaseModel):
     todaysmarket: TodaysMarketParameters
     conventions: dict[str, RateConventions]
     curve_configs: dict[str, YieldCurveConfig]
-    engine_data: EngineData = EngineData({})
+    engine_data: EngineData = EngineData()
     simmarket: ScenarioSimMarketParameters = ScenarioSimMarketParameters({})
     sensitivity: SensitivityScenarioData = SensitivityScenarioData()
 

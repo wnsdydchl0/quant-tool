@@ -164,7 +164,7 @@ def test_parallel_dv01_matches_direct_quantlib(cfg, snap, portfolio, results):
         )
         portfolio.build(EngineFactory.from_config(cfg, snap))
         for t in portfolio:
-            t.instrument.instrument.setPricingEngine(ql.DiscountingBondEngine(shifted))
+            t.instrument().ql_instrument().setPricingEngine(ql.DiscountingBondEngine(shifted))
         base = portfolio.npvs()
         spread.setValue(BP)
         direct = portfolio.npvs() - base
@@ -204,7 +204,7 @@ def test_update_moves_date_forward_forward(cfg, snap, portfolio, smkt):
         )
         portfolio.build(EngineFactory.from_config(cfg, snap))
         for t in portfolio:
-            t.instrument.instrument.setPricingEngine(ql.DiscountingBondEngine(implied))
+            t.instrument().ql_instrument().setPricingEngine(ql.DiscountingBondEngine(implied))
         direct = portfolio.npvs()
     assert ((rolled - direct) / direct).abs().max() < 1e-12
     assert (rolled != base).all()  # 시간이 흘러 값이 바뀐다 (theta)

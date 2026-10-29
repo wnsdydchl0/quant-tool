@@ -28,7 +28,7 @@ def test_load_repo_configs():
     assert ust.quotes()[-1] == "BOND/YIELD/USD/UST/PAR/30Y"
     assert ust.interpolation_method == "LogCubic"
     assert cfg.conventions["UST"].settlement_days == 1
-    assert cfg.engine_data["Bond"].engine == "DiscountingBondEngine"
+    assert cfg.engine_data.engine("Bond") == "DiscountingRiskyBondEngine"
     assert cfg.simmarket.root["UST"].tenors[0] == "1M"
     assert cfg.sensitivity.key_rate_bp == 1.0
 
