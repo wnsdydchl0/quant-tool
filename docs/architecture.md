@@ -303,7 +303,7 @@ quant-tool/
 
 민감도 표(key rate·평행 DV01)는 ORE처럼 `SensitivityCube`의 메소드다. 별도 리포트 모듈은 두지 않는다.
 
-이름 규칙: `configs/`는 값, `data/configuration/`은 그 값을 읽는 코드. 데이터 수집(`pipeline/`)은 `market-data` 프로젝트로 옮긴다.
+이름 규칙: `configs/`는 값, `data/configuration/`은 그 값을 읽는 코드. 데이터 수집·적재는 별도 레포 `market-data`가 맡는다.
 
 ### 1.6 클래스 설계
 
@@ -592,7 +592,7 @@ Autocallable:  {model: LocalVol,     engine: MonteCarlo, params: {paths: 100000}
 | 항목 | 내용 | 현재 방향 |
 |---|---|---|
 | 구조·이름 | 자체 이름 vs ORE 이름 | **ORE 구조·이름을 따른다** (1.5, 1.6, 구현됨) |
-| 데이터 | 이 레포 `pipeline/` vs 별도 프로젝트 | **별도 프로젝트 `market-data` + DuckDB** (`market-data` 레포 `docs/design.md`) |
+| 데이터 | 이 레포에서 수집 vs 별도 프로젝트 | **별도 프로젝트 `market-data` + DuckDB** (`market-data` 레포 `docs/design.md`) |
 | 범위 | 신용 포함 여부 | **신용(CDS, 해저드율, XVA, 담보) 제외** |
 | 시나리오 시장 방식 | 원래 시세 bump vs ORE식 격자 재표현 | **격자 재표현** (PCA·과거 재현과 좌표 일치, 속도, vol 지역성) |
 | 격자 커브 모드 | 절대 vs spreaded(ORE `SpreadedDiscountCurve`) | **spreaded 기본**(구현됨). 기준 대사 오차 ≈1e-16(절대 모드는 합성 샘플 기준 최대 5.1e-4, 30Y). 절대는 `spreaded=False` |
