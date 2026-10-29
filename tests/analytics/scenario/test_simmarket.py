@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 import QuantLib as ql
 
@@ -5,6 +7,7 @@ from quanttool.analytics.engine import ValuationEngine
 from quanttool.analytics.scenario import Scenario, ScenarioSimMarket, SensitivityScenarioGenerator
 from quanttool.analytics.scenario.simmarket import GRID_DAY_COUNTER, sample
 from quanttool.data.configuration import ScenarioSimMarketParameters, YieldCurveSimParameters
+from quanttool.data.marketdata.market import evaluation_date
 from quanttool.data.portfolio import EngineFactory
 from quanttool.qle.scenario import RiskFactorKey
 
@@ -48,7 +51,7 @@ def test_parallel_shift_is_exact_everywhere(smkt, grid):
         curve = smkt.yield_curve("UST")
         times = [0.01, 0.3, 2.5, 13.0, 30.0, 45.0]  # 격자 앞, 사이, 뒤(외삽) 포함
         before = [_zero(curve, t) for t in times]
-        smkt.apply(Scenario("par", {k: BP for k in grid.keys("UST")}))
+        smkt.apply_scenario(Scenario("par", {k: BP for k in grid.keys("UST")}))
         after = [_zero(curve, t) for t in times]
         smkt.reset()
         restored = [_zero(curve, t) for t in times]
@@ -59,19 +62,19 @@ def test_parallel_shift_is_exact_everywhere(smkt, grid):
 
 def test_apply_is_not_cumulative_and_checks_keys(smkt):
     key = RiskFactorKey("zero", "UST", ("5Y",))
-    smkt.apply(Scenario("a", {key: BP}))
-    smkt.apply(Scenario("b", {key: BP}))
+    smkt.apply_scenario(Scenario("a", {key: BP}))
+    smkt.apply_scenario(Scenario("b", {key: BP}))
     assert smkt.sim_data[key].value() == pytest.approx(smkt.base_values[key] + BP)
     smkt.reset()
     with pytest.raises(KeyError, match="simmarket.yaml"):
-        smkt.apply(Scenario("x", {RiskFactorKey("zero", "UST", ("11Y",)): BP}))
+        smkt.apply_scenario(Scenario("x", {RiskFactorKey("zero", "UST", ("11Y",)): BP}))
 
 
 def test_key_rate_shift_is_local(smkt):
     with smkt.active():
         curve = smkt.yield_curve("UST")
         before = [_zero(curve, t) for t in (3.0, 4.5, 5.0, 5.5, 7.0)]
-        smkt.apply(Scenario("kr5y", {RiskFactorKey("zero", "UST", ("5Y",)): BP}))
+        smkt.apply_scenario(Scenario("kr5y", {RiskFactorKey("zero", "UST", ("5Y",)): BP}))
         after = [_zero(curve, t) for t in (3.0, 4.5, 5.0, 5.5, 7.0)]
         smkt.reset()
     moved = [(a - b) / BP for a, b in zip(after, before, strict=True)]
@@ -86,14 +89,13 @@ def test_base_reconciliation(cfg, snap, portfolio, smkt):
     assert recon["rel_diff"].abs().max() < 1e-3
 
 
-def test_denser_grid_reduces_reconciliation_error(cfg, snap, portfolio):
+def test_absolute_mode_denser_grid_reduces_reconciliation_error(cfg, snap, portfolio):
     def err(tenors):
         g = ScenarioSimMarketParameters(
             {"UST": YieldCurveSimParameters(kind="zero", tenors=tenors)}
         )
-        return (
-            ScenarioSimMarket(snap, g).base_reconciliation(portfolio, cfg)["rel_diff"].abs().max()
-        )
+        smkt = ScenarioSimMarket(snap, g, spreaded=False)
+        return smkt.base_reconciliation(portfolio, cfg)["rel_diff"].abs().max()
 
     coarse = err(["3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"])
     dense = err(["1M", "2M", "3M", "6M", "9M", "1Y"] + [f"{m}M" for m in range(18, 361, 6)])
@@ -150,3 +152,52 @@ def test_parallel_dv01_matches_direct_quantlib(cfg, snap, portfolio, results):
     par = results.pnl.loc[[("parallel", "UST")]].iloc[0]
     # 차이는 격자 보간 오차(기준 대사 오차)와 같은 크기
     assert ((par - direct) / direct).abs().max() < 1e-3
+
+
+def test_spreaded_mode_reconciles_exactly(cfg, snap, portfolio, smkt):
+    """spreaded: 기준 상태의 시뮬레이션 커브 = 초기 커브 (ORE SpreadedDiscountCurve)."""
+    assert all(smkt.spreaded.values())
+    recon = smkt.base_reconciliation(portfolio, cfg)
+    assert recon["rel_diff"].abs().max() < 1e-12
+
+
+def test_update_moves_date_forward_forward(cfg, snap, portfolio, smkt):
+    """update(d): 평가일 이동, 기준 커브는 ForwardForward로 굴린다.
+
+    직접 계산은 QuantLib ImpliedTermStructure.
+    """
+    nxt = date(2026, 10, 26)
+    with smkt.active():
+        portfolio.build(EngineFactory(smkt, cfg))
+        base = portfolio.npvs()
+    smkt.update(nxt)
+    with smkt.active():
+        assert ql.Settings.instance().evaluationDate == ql.Date(26, 10, 2026)
+        assert smkt.yield_curve("UST").referenceDate() == ql.Date(26, 10, 2026)
+        rolled = portfolio.npvs()
+    smkt.reset()
+    assert smkt.date == smkt.asof
+
+    # 직접 계산: 초기 커브를 nxt로 굴린 ImpliedTermStructure로 같은 채권을 평가
+    with evaluation_date(nxt):
+        implied = ql.YieldTermStructureHandle(
+            ql.ImpliedTermStructure(snap.yield_curve("UST"), ql.Date(26, 10, 2026))
+        )
+        portfolio.build(EngineFactory(snap, cfg))
+        for t in portfolio:
+            t.instrument.instrument.setPricingEngine(ql.DiscountingBondEngine(implied))
+        direct = portfolio.npvs()
+    assert ((rolled - direct) / direct).abs().max() < 1e-12
+    assert (rolled != base).all()  # 시간이 흘러 값이 바뀐다 (theta)
+
+
+def test_update_applies_generator_scenarios(cfg, grid, smkt):
+    gen = SensitivityScenarioGenerator(grid, cfg.sensitivity)
+    smkt.scenario_generator = gen
+    first = next(iter(gen.generate()))
+    smkt.update(smkt.asof)
+    key = next(iter(first.shifts))
+    assert smkt.sim_data[key].value() == pytest.approx(smkt.base_values[key] + first.shifts[key])
+    smkt.scenario_generator = None
+    smkt.reset()
+    assert all(q.value() == smkt.base_values[k] for k, q in smkt.sim_data.items())

@@ -50,7 +50,7 @@ class ValuationEngine:
             base = self.portfolio.npvs()
             try:
                 for s in scenarios:
-                    self.smkt.apply(s)
+                    self.smkt.apply_scenario(s)
                     labels.append(s.label)
                     rows.append(self.portfolio.npvs())
             finally:

@@ -2,7 +2,7 @@
 
 from .scenario import RiskFactorKey, Scenario
 from .sensitivityscenariogenerator import ScenarioGenerator, SensitivityScenarioGenerator
-from .simmarket import ScenarioSimMarket
+from .simmarket import ScenarioSimMarket, SimMarket
 
 __all__ = [
     "RiskFactorKey",
@@ -10,4 +10,5 @@ __all__ = [
     "ScenarioGenerator",
     "ScenarioSimMarket",
     "SensitivityScenarioGenerator",
+    "SimMarket",
 ]

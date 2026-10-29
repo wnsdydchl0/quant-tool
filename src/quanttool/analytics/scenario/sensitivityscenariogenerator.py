@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator
+from datetime import date
 
 from quanttool.data.configuration import ScenarioSimMarketParameters, SensitivityScenarioData
 from quanttool.data.utilities.ids import bp_to_decimal
@@ -12,8 +13,20 @@ from .scenario import Scenario
 
 
 class ScenarioGenerator(ABC):
+    """시나리오를 차례로 내준다. SimMarket.update(d)는 next(d)로 하나씩 받는다 (ORE와 같은 방식)."""
+
+    _iter: Iterator[Scenario] | None = None
+
     @abstractmethod
     def generate(self) -> Iterable[Scenario]: ...
+
+    def next(self, d: date) -> Scenario:
+        if self._iter is None:
+            self._iter = iter(self.generate())
+        return next(self._iter)
+
+    def reset(self) -> None:
+        self._iter = None
 
 
 class SensitivityScenarioGenerator(ScenarioGenerator):

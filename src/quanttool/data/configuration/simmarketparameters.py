@@ -21,6 +21,8 @@ class YieldCurveSimParameters(BaseModel):
     tenors: list[str] = Field(min_length=2)
     interpolation: Literal["Linear(Zero)", "LogLinear(Discount)"] = "Linear(Zero)"
     extrapolation: Literal["flat_zero"] = "flat_zero"
+    spreaded: bool = True  # 격자 Quote = 초기 커브 대비 이동량 (ORE useSpreadedTermStructures)
+    roll_down: Literal["ForwardForward"] = "ForwardForward"  # 날짜 이동 시 선도 실현 (ORE 기본)
 
 
 class ScenarioSimMarketParameters(RootModel[dict[str, YieldCurveSimParameters]]):
