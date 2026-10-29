@@ -15,7 +15,7 @@ from quanttool.data.utilities.registry import BUILDERS
 from quanttool.qle.termstructures import bill_price, bill_yield
 
 from .loader import QuoteStore
-from .market import BuiltCurve, HelperInfo, Market, MarketBuilder
+from .market import BuiltCurve, HelperInfo, Market, MarketBuilder, to_ql_date
 
 _CURVES = {
     "LogCubic(Discount)": ql.PiecewiseLogCubicDiscount,
@@ -29,9 +29,9 @@ class YieldCurveBuilder(MarketBuilder):
     kind = "YieldCurve"
 
     def build(self, recipe: YieldCurveConfig, quotes: QuoteStore, market: Market) -> BuiltCurve:
-        conv = self.cfg.conventions[recipe.conventions]
+        conv = self.conventions[recipe.conventions]
         calendar = parsers.calendar(conv.calendar)
-        today = ql.Settings.instance().evaluationDate
+        today = to_ql_date(market.asof)
         settle = calendar.advance(today, conv.settlement_days, ql.Days)
 
         helpers: list[HelperInfo] = []
@@ -50,10 +50,9 @@ class YieldCurveBuilder(MarketBuilder):
                 helpers.append(info)
         helpers.sort(key=lambda h: h.maturity)
 
-        # 기준일이 평가일을 따라 이동 (settlementDays=0 생성자)
-        curve = _CURVES[recipe.interpolation](
-            0, calendar, [h.helper for h in helpers], ql.Actual365Fixed()
-        )
+        # 기준일 = asof 고정 (ORE TodaysMarket과 같음). 시간 이동은 SimMarket이 맡는다.
+        rate_helpers = [h.helper for h in helpers]
+        curve = _CURVES[recipe.interpolation](today, rate_helpers, ql.Actual365Fixed())
         curve.enableExtrapolation()
         return BuiltCurve(curve, helpers)
 

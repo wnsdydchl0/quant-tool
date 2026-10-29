@@ -98,7 +98,8 @@ def test_matches_direct_quantlib(cfg, snap, loader):
             assert ours.discount(d) == pytest.approx(direct.discount(d), abs=1e-12)
 
 
-def test_quote_change_propagates(snap):
+def test_quote_change_propagates(linked_snap):
+    snap = linked_snap
     with snap.active():
         curve = snap.yield_curve("UST")
         before = curve.zeroRate(10.0, ql.Continuous).rate()
@@ -109,6 +110,24 @@ def test_quote_change_propagates(snap):
     table = helper_repricing(snap, "UST").set_index("quote_id")
     assert table.loc["UST/PAR/10Y", "market"] == pytest.approx(0.0408)
     assert table["error_bp"].abs().max() < 0.01
+
+
+def test_todays_market_is_frozen_at_asof(cfg, loader, snap):
+    """기준일은 asof 고정이고, 이후 시세·평가일·다른 날짜 시장과 무관하다 (ORE TodaysMarket)."""
+    curve = snap.yield_curve("UST")
+    d = ql.Date(17, 3, 2031)
+    assert curve.referenceDate() == ql.Date(23, 10, 2026)
+    before = curve.discount(d)
+    TodaysMarket.from_config(date(2026, 10, 22), cfg, loader)  # 다른 날짜 시장 구축
+    snap.quotes["UST/PAR/10Y"].setValue(0.05)
+    settings = ql.Settings.instance()
+    previous = settings.evaluationDate
+    settings.evaluationDate = ql.Date(1, 1, 2027)
+    try:
+        assert curve.referenceDate() == ql.Date(23, 10, 2026)
+        assert curve.discount(d) == before
+    finally:
+        settings.evaluationDate = previous
 
 
 def test_active_restores_evaluation_date(snap):
@@ -122,7 +141,7 @@ def test_active_restores_evaluation_date(snap):
 def test_missing_quote_raises(cfg):
     loader = InMemoryLoader([MarketDatum(ASOF, "UST/PAR/2Y", 0.035)])
     with pytest.raises(KeyError, match="UST/PAR/1M"):
-        TodaysMarket.build(ASOF, cfg, loader)
+        TodaysMarket.from_config(ASOF, cfg, loader)
 
 
 def test_unknown_curve(snap):

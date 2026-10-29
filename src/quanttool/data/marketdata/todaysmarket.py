@@ -1,10 +1,15 @@
-"""오늘 시장: 레시피와 시세로 구축한 관측 시장.
+"""오늘 시장: 레시피와 시세로 구축한, 이후 바뀌지 않는 관측 시장.
 
-ORE 대응: OREData/ored/marketdata/todaysmarket.hpp (+ marketimpl.hpp 보관소).
+ORE 대응: OREData/ored/marketdata/todaysmarket.hpp.
+- 커브 기준일은 asof로 고정한다 (ORE yieldcurve.cpp가 asofDate_를 기준일로 넘김).
+- 구축 직후 부트스트랩하고 커브를 얼린다(freeze). 그래서 이후 평가일이나 시세가 바뀌어도
+  커브가 변하지 않는다. ORE TodaysMarket의 preserveQuoteLinkage=false(기본값)와 같은 시맨틱이다.
+  흔들기는 SimMarket의 몫이다. 시세 연결을 남기려면 preserve_quote_linkage=True.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -14,34 +19,55 @@ from quanttool.data.utilities.registry import BUILDERS
 
 from .dependencygraph import DependencyGraph, Node
 from .loader import Loader, QuoteStore
-from .market import BuiltCurve, HelperInfo, Market, to_ql_date
+from .market import BuiltCurve, HelperInfo, MarketImpl, evaluation_date
 
 if TYPE_CHECKING:
-    from quanttool.data.configuration import Config
+    from quanttool.data.configuration import (
+        Config,
+        RateConventions,
+        TodaysMarketParameters,
+        YieldCurveConfig,
+    )
 
 
-class TodaysMarket(Market):
-    """관측 시장. 레시피와 시세로 구축하고 이름 → Handle 보관소로 내준다."""
-
-    def __init__(self, asof: date, quotes: QuoteStore) -> None:
-        self.asof = asof
-        self.quotes = quotes
-        self._yield_curves: dict[str, ql.RelinkableYieldTermStructureHandle] = {}
+class TodaysMarket(MarketImpl):
+    def __init__(
+        self,
+        asof: date,
+        params: TodaysMarketParameters,
+        loader: Loader,
+        curve_configs: Mapping[str, YieldCurveConfig],
+        conventions: Mapping[str, RateConventions],
+        preserve_quote_linkage: bool = False,
+    ) -> None:
+        super().__init__(asof, QuoteStore(loader.load(asof)))
+        self.preserve_quote_linkage = preserve_quote_linkage
         self._built: dict[str, BuiltCurve] = {}
 
-    @classmethod
-    def build(cls, asof: date, cfg: Config, loader: Loader) -> TodaysMarket:
-        ql.Settings.instance().evaluationDate = to_ql_date(asof)
-        snap = cls(asof, QuoteStore(loader.load(asof)))
-
-        recipes = {("YieldCurve", name): cfg.curve_configs[name] for name in cfg.curve_configs}
-        builders = {node: BUILDERS[node[0]](cfg) for node in recipes}
+        recipes = {("YieldCurve", name): cfg for name, cfg in curve_configs.items()}
+        builders = {node: BUILDERS[node[0]](conventions) for node in recipes}
         graph = DependencyGraph({n: builders[n].requires(r) for n, r in recipes.items()})
-        targets = [("YieldCurve", n) for n in cfg.todaysmarket.yield_curves]
-        for node in graph.order(targets):
-            built = builders[node].build(recipes[node], snap.quotes, snap)
-            snap._register(node, built)
-        return snap
+        targets = [("YieldCurve", n) for n in params.yield_curves]
+        with evaluation_date(asof):  # 헬퍼 결제일 계산이 평가일을 쓰므로 asof에서 구축
+            for node in graph.order(targets):
+                built = builders[node].build(recipes[node], self.quotes, self)
+                built.curve.discount(1.0)  # 지금(asof) 부트스트랩
+                if not preserve_quote_linkage:
+                    built.curve.freeze()
+                self._register(node, built)
+
+    @classmethod
+    def from_config(
+        cls, asof: date, cfg: Config, loader: Loader, preserve_quote_linkage: bool = False
+    ) -> TodaysMarket:
+        return cls(
+            asof,
+            cfg.todaysmarket,
+            loader,
+            cfg.curve_configs,
+            cfg.conventions,
+            preserve_quote_linkage,
+        )
 
     def _register(self, node: Node, built: BuiltCurve) -> None:
         kind, name = node
@@ -49,20 +75,8 @@ class TodaysMarket(Market):
             raise NotImplementedError(kind)
         handle = ql.RelinkableYieldTermStructureHandle()
         handle.linkTo(built.curve)
-        self._yield_curves[name] = handle
+        self._set_yield_curve(name, handle)
         self._built[name] = built
-
-    def quote(self, quote_id: str) -> ql.QuoteHandle:
-        return self.quotes.handle(quote_id)
-
-    def yield_curve(self, name: str) -> ql.YieldTermStructureHandle:
-        try:
-            return self._yield_curves[name]
-        except KeyError:
-            raise KeyError(f"커브 {name!r}가 없다: {sorted(self._yield_curves)}") from None
-
-    def yield_curve_names(self) -> list[str]:
-        return list(self._yield_curves)
 
     def curve_helpers(self, name: str) -> list[HelperInfo]:
         return self._built[name].helpers

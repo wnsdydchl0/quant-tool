@@ -22,7 +22,13 @@ def loader():
 
 @pytest.fixture
 def snap(cfg, loader):
-    return TodaysMarket.build(ASOF, cfg, loader)
+    return TodaysMarket.from_config(ASOF, cfg, loader)
+
+
+@pytest.fixture
+def linked_snap(cfg, loader):
+    """시세 연결을 유지한 오늘 시장 (Quote 변경이 커브로 전파된다)."""
+    return TodaysMarket.from_config(ASOF, cfg, loader, preserve_quote_linkage=True)
 
 
 @pytest.fixture

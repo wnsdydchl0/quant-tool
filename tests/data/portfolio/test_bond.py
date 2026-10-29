@@ -46,7 +46,8 @@ def test_engine_cached_per_curve(cfg, snap, portfolio):
     assert len(engines) == 1
 
 
-def test_npv_reacts_to_quote(cfg, snap, portfolio):
+def test_npv_reacts_to_quote(cfg, linked_snap, portfolio):
+    snap = linked_snap
     with snap.active():
         portfolio.build(EngineFactory(snap, cfg))
         before = portfolio.trades["UST_10Y"].npv()

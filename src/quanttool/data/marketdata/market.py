@@ -1,6 +1,6 @@
-"""시장 규격과 빌더 공통 부품.
+"""시장 규격, 보관소, 빌더 공통 부품.
 
-ORE 대응: OREData/ored/marketdata/market.hpp.
+ORE 대응: OREData/ored/marketdata/market.hpp, marketimpl.hpp.
 
 가격결정·시나리오 코드는 Market 규격 메소드만 쓴다 (docs/architecture.md 1.7 불변 조건).
 """
@@ -8,7 +8,7 @@ ORE 대응: OREData/ored/marketdata/market.hpp.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
@@ -20,7 +20,7 @@ from .dependencygraph import Node
 from .loader import QuoteStore
 
 if TYPE_CHECKING:
-    from quanttool.data.configuration import Config
+    from quanttool.data.configuration import RateConventions
 
 
 def to_ql_date(d: date) -> ql.Date:
@@ -83,13 +83,42 @@ class BuiltCurve:
     helpers: list[HelperInfo] = field(default_factory=list)
 
 
+class MarketImpl(Market):
+    """보관소: 종류별 이름 → Handle과 조회 구현. ORE 대응: OREData/ored/marketdata/marketimpl.hpp.
+
+    TodaysMarket(구축)과 SimMarket(변경)이 같은 보관소를 쓰고, 채우는 방식만 다르다.
+    """
+
+    def __init__(self, asof: date, quotes: QuoteStore | None = None) -> None:
+        self.asof = asof
+        self.quotes = quotes
+        self._yield_curves: dict[str, ql.YieldTermStructureHandle] = {}
+
+    def quote(self, quote_id: str) -> ql.QuoteHandle:
+        if self.quotes is None:
+            raise KeyError(f"{type(self).__name__}: 시세 {quote_id!r}를 보관하지 않는다")
+        return self.quotes.handle(quote_id)
+
+    def yield_curve(self, name: str) -> ql.YieldTermStructureHandle:
+        try:
+            return self._yield_curves[name]
+        except KeyError:
+            raise KeyError(f"커브 {name!r}가 없다: {sorted(self._yield_curves)}") from None
+
+    def yield_curve_names(self) -> list[str]:
+        return list(self._yield_curves)
+
+    def _set_yield_curve(self, name: str, handle: ql.YieldTermStructureHandle) -> None:
+        self._yield_curves[name] = handle
+
+
 class MarketBuilder(ABC):
     """레시피 하나로 시장 객체 하나를 만든다. ORE 대응: marketdata/yieldcurve.hpp 등 빌더 계열."""
 
     kind: str
 
-    def __init__(self, cfg: Config) -> None:
-        self.cfg = cfg
+    def __init__(self, conventions: Mapping[str, RateConventions]) -> None:
+        self.conventions = conventions
 
     def requires(self, recipe: Any) -> list[Node]:
         """의존 그래프용: 이 레시피가 참조하는 다른 시장 객체."""
