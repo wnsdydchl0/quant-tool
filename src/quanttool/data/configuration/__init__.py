@@ -10,18 +10,30 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .conventions import RateConventions
+from .conventions import Conventions, InstrumentConventions, RateConventions
 from .curveconfig import YieldCurveConfig
+from .curvespec import CurveSpec, YieldCurveSpec, parse_curve_spec
 from .enginedata import EngineData, EngineSpec
 from .simmarketparameters import (
     ScenarioSimMarketParameters,
     SensitivityScenarioData,
     YieldCurveSimParameters,
 )
-from .todaysmarketparameters import TodaysMarketParameters
+from .todaysmarketparameters import (
+    DEFAULT_CONFIGURATION,
+    MarketConfiguration,
+    MarketObject,
+    TodaysMarketParameters,
+)
 
 __all__ = [
+    "DEFAULT_CONFIGURATION",
     "Config",
+    "Conventions",
+    "CurveSpec",
+    "InstrumentConventions",
+    "MarketConfiguration",
+    "MarketObject",
     "EngineData",
     "EngineSpec",
     "RateConventions",
@@ -30,7 +42,9 @@ __all__ = [
     "TodaysMarketParameters",
     "YieldCurveConfig",
     "YieldCurveSimParameters",
+    "YieldCurveSpec",
     "load_config",
+    "parse_curve_spec",
 ]
 
 
@@ -46,9 +60,14 @@ class Config(BaseModel):
 
     @model_validator(mode="after")
     def _check_references(self) -> Config:
-        for name in self.todaysmarket.yield_curves:
-            if name not in self.curve_configs:
-                raise ValueError(f"todaysmarket의 커브 {name!r}에 대한 레시피가 없다")
+        for conf in self.todaysmarket.configurations:
+            for spec_str in self.todaysmarket.curve_specs(conf):
+                spec = parse_curve_spec(spec_str)
+                recipe = self.curve_configs.get(spec.curve_config_id)
+                if recipe is None:
+                    raise ValueError(f"todaysmarket의 {spec_str!r}에 대한 레시피가 없다")
+                if isinstance(spec, YieldCurveSpec) and recipe.currency != spec.ccy:
+                    raise ValueError(f"{spec_str!r}: 레시피 통화 {recipe.currency!r}와 다르다")
         for curve in self.curve_configs.values():
             if curve.conventions not in self.conventions:
                 raise ValueError(f"{curve.name}: 관례 {curve.conventions!r}가 없다")
@@ -81,4 +100,7 @@ def load_config(root: str | Path = "configs") -> Config:
     for key, path in optional.items():
         if path.exists():
             data[key] = _read(path)
-    return Config.model_validate(data)
+    cfg = Config.model_validate(data)
+    # ORE InputParameters와 같이 관례를 전역 등록부에 둔다
+    InstrumentConventions.instance().set_conventions(Conventions(cfg.conventions))
+    return cfg

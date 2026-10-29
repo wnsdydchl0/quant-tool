@@ -29,7 +29,7 @@ class YieldCurveBuilder(MarketBuilder):
     kind = "YieldCurve"
 
     def build(self, recipe: YieldCurveConfig, quotes: QuoteStore, market: Market) -> BuiltCurve:
-        conv = self.conventions[recipe.conventions]
+        conv = self.conventions(recipe.conventions)
         calendar = parsers.calendar(conv.calendar)
         today = to_ql_date(market.asof)
         settle = calendar.advance(today, conv.settlement_days, ql.Days)

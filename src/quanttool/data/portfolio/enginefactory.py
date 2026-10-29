@@ -9,12 +9,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Hashable, Mapping
+from collections.abc import Hashable
 from typing import TYPE_CHECKING, ClassVar
 
 import QuantLib as ql
 
-from quanttool.data.configuration import EngineData, EngineSpec, RateConventions
+from quanttool.data.configuration import (
+    EngineData,
+    EngineSpec,
+    InstrumentConventions,
+    RateConventions,
+)
 from quanttool.data.marketdata.market import Market
 from quanttool.data.utilities.registry import ENGINE_BUILDERS
 
@@ -44,20 +49,14 @@ class EngineBuilder(ABC):
 
 
 class EngineFactory:
-    def __init__(
-        self,
-        engine_data: EngineData,
-        market: Market,
-        conventions: Mapping[str, RateConventions],
-    ) -> None:
+    def __init__(self, engine_data: EngineData, market: Market) -> None:
         self.engine_data = engine_data
         self.market = market
-        self._conventions = conventions
         self._builders: dict[str, EngineBuilder] = {}
 
     @classmethod
     def from_config(cls, cfg: Config, market: Market) -> EngineFactory:
-        return cls(cfg.engine_data, market, cfg.conventions)
+        return cls(cfg.engine_data, market)
 
     def builder(self, trade_type: str) -> EngineBuilder:
         spec = self.engine_data[trade_type]
@@ -72,8 +71,6 @@ class EngineFactory:
             self._builders[trade_type] = builder_cls(self.market, spec)
         return self._builders[trade_type]
 
-    def conventions(self, name: str) -> RateConventions:
-        try:
-            return self._conventions[name]
-        except KeyError:
-            raise KeyError(f"관례 {name!r}가 없다: {sorted(self._conventions)}") from None
+    @staticmethod
+    def conventions(name: str) -> RateConventions:
+        return InstrumentConventions.instance().conventions().get(name)

@@ -1,2 +1,9 @@
 # TodaysMarket이 구축할 대상 (ORE todaysmarket.xml, TodaysMarketParameters 대응)
-yield_curves: [UST]
+# configurations: configuration id → 시장 객체 종류별 묶음 id
+# 묶음: {시장에서 부르는 이름: 커브 지정 "종류/통화/레시피 id"}. 레시피 id = market/curves/*.yaml의 name
+configurations:
+  default: {discounting_curves_id: default, yield_curves_id: default}
+discounting_curves:
+  default: {USD: Yield/USD/UST}
+yield_curves:
+  default: {UST: Yield/USD/UST}

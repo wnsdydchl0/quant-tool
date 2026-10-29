@@ -6,7 +6,13 @@ import QuantLib as ql
 import yaml
 from pydantic import ValidationError
 
-from quanttool.data.configuration import load_config
+from quanttool.data.configuration import (
+    InstrumentConventions,
+    MarketObject,
+    YieldCurveSpec,
+    load_config,
+    parse_curve_spec,
+)
 from quanttool.data.utilities import parsers
 
 CONFIGS = Path(__file__).resolve().parents[3] / "configs"
@@ -15,7 +21,9 @@ CONFIGS = Path(__file__).resolve().parents[3] / "configs"
 def test_load_repo_configs():
     cfg = load_config(CONFIGS)
     ust = cfg.curve_configs["UST"]
-    assert cfg.todaysmarket.yield_curves == ["UST"]
+    assert cfg.todaysmarket.mapping(MarketObject.YieldCurve) == {"UST": "Yield/USD/UST"}
+    assert cfg.todaysmarket.mapping(MarketObject.DiscountCurve) == {"USD": "Yield/USD/UST"}
+    assert cfg.todaysmarket.curve_specs() == ["Yield/USD/UST"]
     assert ust.quote_ids()[0] == "UST/PAR/1M"
     assert ust.quote_ids()[-1] == "UST/PAR/30Y"
     assert cfg.conventions["UST"].settlement_days == 1
@@ -52,9 +60,50 @@ def test_unsupported_calendar(tmp_path):
 
 def test_missing_curve_recipe(tmp_path):
     root = _copy(tmp_path)
-    _edit(root / "market/todaysmarket.yaml", lambda d: d.update(yield_curves=["UST", "KRW_KTB"]))
+    _edit(
+        root / "market/todaysmarket.yaml",
+        lambda d: d["yield_curves"]["default"].update(KTB="Yield/KRW/KRW_KTB"),
+    )
     with pytest.raises(ValidationError, match="KRW_KTB"):
         load_config(root)
+
+
+def test_spec_currency_must_match_recipe(tmp_path):
+    root = _copy(tmp_path)
+    _edit(
+        root / "market/todaysmarket.yaml",
+        lambda d: d["discounting_curves"]["default"].update(EUR="Yield/EUR/UST"),
+    )
+    with pytest.raises(ValidationError, match="통화"):
+        load_config(root)
+
+
+def test_unknown_configuration_group(tmp_path):
+    root = _copy(tmp_path)
+    _edit(
+        root / "market/todaysmarket.yaml",
+        lambda d: d["configurations"].update(pricing={"yield_curves_id": "nope"}),
+    )
+    with pytest.raises(ValidationError, match="nope"):
+        load_config(root)
+
+
+def test_parse_curve_spec():
+    spec = parse_curve_spec("Yield/USD/UST")
+    assert spec == YieldCurveSpec(curve_config_id="UST", ccy="USD")
+    assert spec.name == "Yield/USD/UST"
+    with pytest.raises(ValueError):
+        parse_curve_spec("Yield/USD")
+    with pytest.raises(ValueError):
+        parse_curve_spec("Default/USD/X")
+
+
+def test_load_config_registers_conventions():
+    cfg = load_config(CONFIGS)
+    conv = InstrumentConventions.instance().conventions()
+    assert conv.get("UST") == cfg.conventions["UST"]
+    with pytest.raises(KeyError, match="NOPE"):
+        conv.get("NOPE")
 
 
 def test_qlmap():

@@ -53,7 +53,7 @@ def test_engine_data_mismatch_rejected(cfg, snap):
 
     bad = EngineData({"Bond": {"model": "BlackScholes", "engine": "DiscountingBondEngine"}})
     with pytest.raises(KeyError, match="맞지 않는다"):
-        EngineFactory(bad, snap, cfg.conventions).builder("Bond")
+        EngineFactory(bad, snap).builder("Bond")
 
 
 def test_npv_reacts_to_quote(cfg, linked_snap, portfolio):

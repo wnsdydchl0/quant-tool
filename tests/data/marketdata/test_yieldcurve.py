@@ -147,3 +147,18 @@ def test_missing_quote_raises(cfg):
 def test_unknown_curve(snap):
     with pytest.raises(KeyError, match="KRW_KTB"):
         snap.yield_curve("KRW_KTB")
+
+
+def test_names_share_one_recipe_curve(snap):
+    """discount_curve("USD")와 yield_curve("UST")가 같은 레시피 → 같은 커브 객체."""
+    d = ql.Date(15, 8, 2036)
+    assert snap.discount_curve("USD").discount(d) == snap.yield_curve("UST").discount(d)
+    assert snap.discount_curve("USD") is snap.yield_curve("UST")  # 같은 Handle
+
+
+def test_configuration_falls_back_to_default(snap):
+    """없는 configuration은 default에서 찾는다 (ORE marketimpl.cpp lookup)."""
+    d = ql.Date(15, 8, 2036)
+    assert snap.yield_curve("UST", "pricing").discount(d) == snap.yield_curve("UST").discount(d)
+    with pytest.raises(KeyError, match="Discount"):
+        snap.discount_curve("EUR")

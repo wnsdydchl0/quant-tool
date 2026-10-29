@@ -23,8 +23,14 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import QuantLib as ql
 
-from quanttool.data.configuration import ScenarioSimMarketParameters
-from quanttool.data.marketdata.market import Market, MarketImpl, evaluation_date, to_ql_date
+from quanttool.data.configuration import DEFAULT_CONFIGURATION, ScenarioSimMarketParameters
+from quanttool.data.marketdata.market import (
+    Market,
+    MarketImpl,
+    YieldCurveType,
+    evaluation_date,
+    to_ql_date,
+)
 
 from .scenario import RiskFactorKey, Scenario
 
@@ -116,7 +122,7 @@ class ScenarioSimMarket(SimMarket):
         self._base_links: dict[str, ql.RelinkableYieldTermStructureHandle] = {}
         with self.active():
             for name in params.names():
-                self._set_yield_curve(name, self._grid_curve(name))
+                self._set_yield_curve(YieldCurveType.Yield, name, self._grid_curve(name))
         self._names = set(params.names())
 
     def _grid_curve(self, name: str) -> ql.RelinkableYieldTermStructureHandle:
@@ -149,10 +155,17 @@ class ScenarioSimMarket(SimMarket):
         return handle
 
     # --- Market 규격: 격자에 없는 커브는 흔들 수 없고 초기 시장 그대로
-    def yield_curve(self, name: str) -> ql.YieldTermStructureHandle:
+    def yield_curve(
+        self, name: str, configuration: str = DEFAULT_CONFIGURATION
+    ) -> ql.YieldTermStructureHandle:
         if name in self._names:
-            return super().yield_curve(name)
-        return self.init_market.yield_curve(name)
+            return super().yield_curve(name, configuration)
+        return self.init_market.yield_curve(name, configuration)
+
+    def discount_curve(
+        self, ccy: str, configuration: str = DEFAULT_CONFIGURATION
+    ) -> ql.YieldTermStructureHandle:
+        return self.init_market.discount_curve(ccy, configuration)
 
     def quote(self, quote_id: str) -> ql.QuoteHandle:
         return self.init_market.quote(quote_id)

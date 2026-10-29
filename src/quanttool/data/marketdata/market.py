@@ -8,19 +8,30 @@ ORE 대응: OREData/ored/marketdata/market.hpp, marketimpl.hpp.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
-from typing import TYPE_CHECKING, Any
+from enum import StrEnum
+from typing import Any
 
 import QuantLib as ql
+
+from quanttool.data.configuration import (
+    DEFAULT_CONFIGURATION,
+    InstrumentConventions,
+    RateConventions,
+)
 
 from .dependencygraph import Node
 from .loader import QuoteStore
 
-if TYPE_CHECKING:
-    from quanttool.data.configuration import RateConventions
+
+class YieldCurveType(StrEnum):
+    """보관소에서 같은 이름이라도 용도를 구분하는 키. ORE 대응: market.hpp ``YieldCurveType``."""
+
+    Discount = "Discount"  # discount_curve(통화)
+    Yield = "Yield"  # yield_curve(이름)
 
 
 def to_ql_date(d: date) -> ql.Date:
@@ -40,7 +51,10 @@ def evaluation_date(d: date) -> Iterator[None]:
 
 
 class Market(ABC):
-    """시장 규격 (메뉴판). TodaysMarket과 ScenarioSimMarket이 구현한다."""
+    """시장 규격 (메뉴판). TodaysMarket과 ScenarioSimMarket이 구현한다. ORE 대응: market.hpp.
+
+    모든 조회는 configuration을 받는다. 없는 configuration이면 "default"에서 찾는다(ORE와 같음).
+    """
 
     asof: date
 
@@ -48,7 +62,14 @@ class Market(ABC):
     def quote(self, quote_id: str) -> ql.QuoteHandle: ...
 
     @abstractmethod
-    def yield_curve(self, name: str) -> ql.YieldTermStructureHandle: ...
+    def discount_curve(
+        self, ccy: str, configuration: str = DEFAULT_CONFIGURATION
+    ) -> ql.YieldTermStructureHandle: ...
+
+    @abstractmethod
+    def yield_curve(
+        self, name: str, configuration: str = DEFAULT_CONFIGURATION
+    ) -> ql.YieldTermStructureHandle: ...
 
     def index(self, name: str) -> ql.Index:
         raise NotImplementedError(f"{type(self).__name__}: index 미지원")
@@ -92,24 +113,52 @@ class MarketImpl(Market):
     def __init__(self, asof: date, quotes: QuoteStore | None = None) -> None:
         self.asof = asof
         self.quotes = quotes
-        self._yield_curves: dict[str, ql.YieldTermStructureHandle] = {}
+        # (configuration, 용도, 이름) → Handle. ORE marketimpl.hpp ``yieldCurves_``
+        self._yield_curves: dict[tuple[str, YieldCurveType, str], ql.YieldTermStructureHandle] = {}
 
     def quote(self, quote_id: str) -> ql.QuoteHandle:
         if self.quotes is None:
             raise KeyError(f"{type(self).__name__}: 시세 {quote_id!r}를 보관하지 않는다")
         return self.quotes.handle(quote_id)
 
-    def yield_curve(self, name: str) -> ql.YieldTermStructureHandle:
-        try:
-            return self._yield_curves[name]
-        except KeyError:
-            raise KeyError(f"커브 {name!r}가 없다: {sorted(self._yield_curves)}") from None
+    def discount_curve(
+        self, ccy: str, configuration: str = DEFAULT_CONFIGURATION
+    ) -> ql.YieldTermStructureHandle:
+        return self._lookup(YieldCurveType.Discount, ccy, configuration)
 
-    def yield_curve_names(self) -> list[str]:
-        return list(self._yield_curves)
+    def yield_curve(
+        self, name: str, configuration: str = DEFAULT_CONFIGURATION
+    ) -> ql.YieldTermStructureHandle:
+        return self._lookup(YieldCurveType.Yield, name, configuration)
 
-    def _set_yield_curve(self, name: str, handle: ql.YieldTermStructureHandle) -> None:
-        self._yield_curves[name] = handle
+    def yield_curve_names(
+        self,
+        curve_type: YieldCurveType = YieldCurveType.Yield,
+        configuration: str = DEFAULT_CONFIGURATION,
+    ) -> list[str]:
+        return [n for (c, t, n) in self._yield_curves if c == configuration and t == curve_type]
+
+    def _lookup(
+        self, curve_type: YieldCurveType, name: str, configuration: str
+    ) -> ql.YieldTermStructureHandle:
+        for conf in (
+            configuration,
+            DEFAULT_CONFIGURATION,
+        ):  # ORE marketimpl.cpp lookup: default로 대체
+            h = self._yield_curves.get((conf, curve_type, name))
+            if h is not None:
+                return h
+        names = sorted(n for (_, t, n) in self._yield_curves if t == curve_type)
+        raise KeyError(f"{curve_type.value} 커브 {name!r}가 없다 ({configuration}): {names}")
+
+    def _set_yield_curve(
+        self,
+        curve_type: YieldCurveType,
+        name: str,
+        handle: ql.YieldTermStructureHandle,
+        configuration: str = DEFAULT_CONFIGURATION,
+    ) -> None:
+        self._yield_curves[(configuration, curve_type, name)] = handle
 
 
 class MarketBuilder(ABC):
@@ -117,8 +166,10 @@ class MarketBuilder(ABC):
 
     kind: str
 
-    def __init__(self, conventions: Mapping[str, RateConventions]) -> None:
-        self.conventions = conventions
+    @staticmethod
+    def conventions(id: str) -> RateConventions:
+        """전역 관례 등록부에서 꺼낸다 (ORE InstrumentConventions::instance().conventions())."""
+        return InstrumentConventions.instance().conventions().get(id)
 
     def requires(self, recipe: Any) -> list[Node]:
         """의존 그래프용: 이 레시피가 참조하는 다른 시장 객체."""
