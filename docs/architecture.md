@@ -6,8 +6,8 @@
 - **2장 진행**: 결정 사항, 현황, 다음 단계.
 - 데이터 수집·저장은 별도 프로젝트로 분리한다: `docs/data_platform.md`.
 
-> **상태(2026-10-28)**: 1장의 구조와 클래스 이름은 ORE를 따르도록 고친 **제안**이다(피드백 대기).
-> 현재 코드는 아직 이전 이름(`Snapshot`, `ScenarioMarket` 등)이며, 대응은 1.8 표를 본다.
+> **상태(2026-10-29)**: 1장의 구조와 클래스 이름(ORE 구조)대로 코드를 재구성했다. ✓ 표시는 구현된 것, 나머지는 예정이다.
+> 재구성 전 이름과의 대응은 1.8 표를 본다.
 > 범위에서 신용(CDS, 해저드율, XVA, 담보) 기능은 제외한다.
 
 ---
@@ -322,7 +322,7 @@ QuantLib의 부품을 쓰고, ORE의 구조(QuantExt / OREData / OREAnalytics)�
 
 ```
 0. 기반                      qle/, data/utilities/
-   - QuantLib 확장 : bill BEY↔가격, 격자 커브(절대·spreaded)                       ← QuantExt
+   - QuantLib 확장 : bill BEY↔가격, RiskFactorKey                                 ← QuantExt
    - 이름·파서    : 시세 키(ids), 문자열 → Calendar·DayCounter(parsers), 등록부(registry) ← ored/utilities
 1. 레시피                    data/configuration/                                       ← ored/configuration
    - CurveConfig(어떤 시세로 어떤 헬퍼·보간), Conventions(관례), TodaysMarketParameters(만들 시장 객체 목록),
@@ -400,9 +400,9 @@ QuantLib의 부품을 쓰고, ORE의 구조(QuantExt / OREData / OREAnalytics)�
 | NPV/Sensitivity cube | pandas |
 | `OREApp` + `InputParameters` | 노트북에서 객체 직접 조립 (+ 필요하면 간단한 `run` 함수) |
 
-### 1.6 프로젝트 구조 (제안)
+### 1.6 프로젝트 구조
 
-✓ = 현재 코드에 같은 기능이 있음(이름·위치는 1.8 표대로 옮길 예정), 나머지는 예정.
+✓ = 구현됨, 나머지는 예정.
 
 ```
 quant-tool/
@@ -414,38 +414,40 @@ quant-tool/
 │   │   ├── indices/                       cd91.yaml, sofr.yaml
 │   │   └── vols/                          spx.yaml
 │   ├── pricing/engines.yaml ✓             EngineData (models.yaml 예정)
-│   ├── scenario/simmarket.yaml ✓          ScenarioSimMarketParameters (← grid.yaml)
+│   ├── scenario/simmarket.yaml ✓          ScenarioSimMarketParameters
 │   ├── scenario/sensitivity.yaml ✓        SensitivityScenarioData (stress.yaml 예정)
 │   └── estimated/                         pca_krw.yaml, ssr_spx.yaml (값 + 출처, 격자 좌표 기준)
 ├── positions/ust_book.yaml ✓              포트폴리오 (ORE portfolio.xml)
 │
 ├── src/quanttool/
 │   ├── qle/                               [QuantExt]
-│   │   └── termstructures.py              bill BEY↔가격 ✓, 격자 커브 구성(절대 ✓ / spreaded)
+│   │   ├── termstructures.py ✓            bill BEY↔가격
+│   │   └── scenario.py ✓                  RiskFactorKey (ORE도 QuantExt에 둔다: 설정이 키를 만들 수 있게)
 │   │
 │   ├── data/                              [OREData] 번역과 조립
 │   │   ├── utilities/                     ids.py ✓, registry.py ✓, parsers.py ✓
 │   │   ├── configuration/                 curveconfig.py ✓, conventions.py ✓, todaysmarketparameters.py ✓,
-│   │   │                                  enginedata.py ✓, simmarketparameters.py ✓, sensitivitydata.py ✓, load_config ✓
-│   │   ├── marketdata/                    loader.py ✓(Loader, InMemoryLoader, CsvLoader, DuckDBLoader, MarketDatum),
-│   │   │                                  market.py(Market ✓, MarketImpl), todaysmarket.py ✓,
+│   │   │                                  enginedata.py ✓, simmarketparameters.py ✓(+ SensitivityScenarioData), load_config ✓
+│   │   ├── marketdata/                    loader.py ✓(Loader, InMemoryLoader, UstParCsvLoader, MarketDatum, QuoteStore; DuckDBLoader 예정),
+│   │   │                                  market.py ✓(Market, MarketImpl, MarketBuilder), todaysmarket.py ✓,
 │   │   │                                  yieldcurve.py ✓(YieldCurveBuilder; 스왑 구간·IndexBuilder 예정),
 │   │   │                                  equity.py(EquityCurveBuilder, EquityVolBuilder), dependencygraph.py ✓, diagnostics.py ✓
 │   │   ├── portfolio/                     trade.py ✓(Trade, InstrumentWrapper), legdata.py(LegData, LegBuilder),
 │   │   │                                  bond.py ✓, swap.py, equityoption.py, portfolio.py ✓,
-│   │   │                                  enginefactory.py ✓(EngineFactory, EngineBuilder, CachingEngineBuilder),
+│   │   │                                  enginefactory.py ✓(EngineFactory, EngineBuilder + 키별 캐시),
 │   │   │                                  builders/bond.py ✓, builders/swap.py, builders/vanillaoption.py
 │   │   └── model/                         modelbuilder.py(LocalVolBuilder, HestonBuilder)
 │   │
 │   └── analytics/                         [OREAnalytics] 활용
-│       ├── scenario/                      scenario.py ✓(RiskFactorKey, Scenario), simmarket.py ✓(SimMarket, ScenarioSimMarket),
-│       │                                  sensitivityscenariogenerator.py ✓, stressscenariogenerator.py,
-│       │                                  historicalscenariogenerator.py, pcascenariogenerator.py, rules.py(StickyStrike, SSR)
-│       ├── engine/                        valuationengine.py ✓(ValuationEngine, NPV 표), sensitivityanalysis.py,
-│       │                                  parsensitivityanalysis.py, stresstest.py, pnlexplain.py
-│       └── app/                           marketmonitor.py ✓, sensitivityreport.py ✓, factorhistory.py
+│       ├── scenario/                      scenario.py ✓(Scenario), simmarket.py ✓(SimMarket, ScenarioSimMarket),
+│       │                                  sensitivityscenariogenerator.py ✓(ScenarioGenerator, SensitivityScenarioGenerator),
+│       │                                  stressscenariogenerator.py, historicalscenariogenerator.py, pcascenariogenerator.py,
+│       │                                  rules.py(StickyStrike, SSR)
+│       ├── engine/                        valuationengine.py ✓(ValuationEngine, NPVCube), sensitivityanalysis.py ✓(SensitivityAnalysis,
+│       │                                  SensitivityCube), parsensitivityanalysis.py, stresstest.py, pnlexplain.py
+│       └── app/                           marketmonitor.py ✓, factorhistory.py
 │
-├── notebooks/                             tutorial/ ✓ (흐름 따라가기), 01_ust_curve ✓ (시장 해석)
+├── notebooks/                             tutorial/ ✓ 00~05 (흐름 따라가기), 01_ust_curve ✓ (시장 해석)
 ├── research/                              PCA·SSR 추정 → 검증 후 configs/estimated/
 ├── tests/ ✓                               src와 같은 구조. QuantLib 직접 계산·해석해와 비교 (ORE ExpectedOutput 역할)
 ├── scripts/fetch_references.sh ✓          references/ 클론
@@ -453,9 +455,11 @@ quant-tool/
 └── references/                            (gitignore) QuantLib-SWIG, ORE Engine, ORE-SWIG 원본
 ```
 
+민감도 표(key rate·평행 DV01)는 ORE처럼 `SensitivityCube`의 메소드다. 별도 리포트 모듈은 두지 않는다.
+
 이름 규칙: `configs/`는 값, `data/configuration/`은 그 값을 읽는 코드. 데이터 수집(`pipeline/`)은 `market-data` 프로젝트로 옮긴다.
 
-### 1.7 클래스 설계 (제안)
+### 1.7 클래스 설계
 
 #### 상속
 ```
@@ -464,96 +468,114 @@ Market (규격)                                         ored/marketdata/market.h
     ├ TodaysMarket (구축, asof 고정)                   todaysmarket.hpp
     └ SimMarket (update, reset)                        orea/simulation/simmarket.hpp
        └ ScenarioSimMarket (격자 Quote, 생성기)        orea/scenario/scenariosimmarket.hpp
-Loader ← InMemoryLoader, CsvLoader, DuckDBLoader       ored/marketdata/loader.hpp
-CurveBuilder ← YieldCurveBuilder, IndexBuilder, EquityCurveBuilder, EquityVolBuilder
+Loader ← InMemoryLoader ✓, UstParCsvLoader ✓, DuckDBLoader  ored/marketdata/loader.hpp
+MarketBuilder ← YieldCurveBuilder ✓, IndexBuilder, EquityCurveBuilder, EquityVolBuilder
 Trade ← Bond, Swap, EquityOption, EquityDigital, Autocallable                ored/portfolio/trade.hpp
 LegBuilder ← FixedLegBuilder, FloatingLegBuilder                             ored/portfolio/legbuilders.hpp
-EngineBuilder ← CachingEngineBuilder ← DiscountingBondEngineBuilder, DiscountingSwapEngineBuilder,
+EngineBuilder(키별 캐시 포함) ← DiscountingBondEngineBuilder ✓, DiscountingSwapEngineBuilder,
                 AnalyticEuropeanEngineBuilder, ReplicationDigitalEngineBuilder, LocalVolMCEngineBuilder
 ModelBuilder ← LocalVolBuilder, HestonBuilder
-ScenarioGenerator ← SensitivityScenarioGenerator, StressScenarioGenerator, HistoricalScenarioGenerator, PcaScenarioGenerator(자체)
+ScenarioGenerator ← SensitivityScenarioGenerator ✓, StressScenarioGenerator, HistoricalScenarioGenerator, PcaScenarioGenerator(자체)
 ```
 
 #### 구성
 ```
 TodaysMarket            asof, TodaysMarketParameters, CurveConfigs, Conventions, Loader → (MarketImpl 보관소) 이름 → RelinkableHandle
-EngineFactory           Market, EngineData, 등록된 EngineBuilder·LegBuilder
+EngineFactory           EngineData, Market, Conventions, 등록된 EngineBuilder (LegBuilder 예정)
 EngineBuilder           (model, engine, trade_types), Market(팩토리가 건넴), 엔진 캐시
 Trade                   계약 데이터 / build 후 InstrumentWrapper(QuantLib Instrument, 승수), legs
 Portfolio               Trade들
-ScenarioSimMarket       초기 Market, ScenarioSimMarketParameters, sim_data(RiskFactorKey → SimpleQuote), 격자 커브 Handle, ScenarioGenerator
-Scenario                asof, label, RiskFactorKey → 값
-ValuationEngine         asof, 날짜 격자, SimMarket → NPV 표
-SensitivityAnalysis     Portfolio, 초기 Market, EngineData, ScenarioSimMarketParameters, SensitivityScenarioData
+ScenarioSimMarket       초기 Market, ScenarioSimMarketParameters, sim_data(RiskFactorKey → SimpleQuote), 격자 커브 Handle,
+                        spreaded면 기준 커브 RelinkableHandle(날짜 이동 시 ImpliedTermStructure로 굴림), ScenarioGenerator
+Scenario                label, RiskFactorKey → 이동량(shifts)
+ValuationEngine         asof, 날짜 목록, SimMarket → NPVCube(기준 NPV, 시나리오[·날짜] × 거래 NPV)
+SensitivityAnalysis     Portfolio, 초기 Market, Config(EngineData·ScenarioSimMarketParameters·SensitivityScenarioData) → SensitivityCube
 ```
 
 #### 핵심 시그니처
+구현된 것은 실제 코드 그대로, `# 예정`은 아직 없다.
 ```python
-class Market(ABC):                                    # 규격
+class Market(ABC):                                    # data/marketdata/market.py
     asof: date
-    def quote(self, key: str) -> ql.QuoteHandle: ...
+    def quote(self, quote_id: str) -> ql.QuoteHandle: ...
     def yield_curve(self, name: str) -> ql.YieldTermStructureHandle: ...
-    def discount_curve(self, ccy: str) -> ql.YieldTermStructureHandle: ...
-    def index(self, name: str) -> ql.Index: ...
-    def equity_spot(self, name: str) -> ql.QuoteHandle: ...
-    def dividend_curve(self, name: str) -> ql.YieldTermStructureHandle: ...
-    def equity_vol(self, name: str) -> ql.BlackVolTermStructureHandle: ...
+    def discount_curve(self, ccy: str) -> ql.YieldTermStructureHandle: ...   # 예정
+    def index(self, name: str) -> ql.Index: ...                              # 예정 (지금은 NotImplementedError)
+    def equity_spot(self, name: str) -> ql.QuoteHandle: ...                  # 예정
+    def dividend_curve(self, name: str) -> ql.YieldTermStructureHandle: ...  # 예정
+    def equity_vol(self, name: str) -> ql.BlackVolTermStructureHandle: ...   # 예정
     def active(self) -> ContextManager: ...           # evaluationDate = 이 시장의 날짜, 끝나면 복원
 
-class MarketImpl(Market): ...                         # 보관소: 종류별 이름 → Handle
+class MarketImpl(Market):                             # 보관소: 종류별 이름 → Handle
+    def __init__(self, asof: date, quotes: QuoteStore | None = None): ...
 
-class TodaysMarket(MarketImpl):
+class TodaysMarket(MarketImpl):                       # data/marketdata/todaysmarket.py
     def __init__(self, asof: date, params: TodaysMarketParameters, loader: Loader,
-                 curve_configs: CurveConfigurations, conventions: Conventions): ...
+                 curve_configs: Mapping[str, YieldCurveConfig], conventions: Mapping[str, RateConventions],
+                 preserve_quote_linkage: bool = False): ...    # False면 구축 직후 커브를 freeze (ORE 기본)
+    @classmethod
+    def from_config(cls, asof: date, cfg: Config, loader: Loader, preserve_quote_linkage: bool = False): ...
+    def curve_helpers(self, name: str) -> list[HelperInfo]: ...
 
-class SimMarket(MarketImpl):
-    def update(self, d: date) -> None: ...            # 평가일 = d, 생성기에서 다음 시나리오, 적용
-    def reset(self) -> None: ...
+class SimMarket(MarketImpl):                          # analytics/scenario/simmarket.py
+    date: date                                        # 현재 시뮬레이션 날짜 (active()가 이 날짜를 씀)
+    scenario_generator: ScenarioGenerator | None
+    scenario: Scenario | None                         # 지금 적용된 시나리오 (None = 기준)
+    def update(self, d: date) -> None: ...            # 평가일 = d, 기준 커브 roll, 생성기의 다음 시나리오 적용
+    def reset(self) -> None: ...                      # 날짜 asof, 기준 시나리오
 
 class ScenarioSimMarket(SimMarket):
-    def __init__(self, init_market: Market, params: ScenarioSimMarketParameters, spreaded: bool = True): ...
-    scenario_generator: ScenarioGenerator | None
-    def base_scenario(self) -> Scenario: ...
-    def apply_scenario(self, s: Scenario) -> None: ...
+    def __init__(self, init_market: Market, params: ScenarioSimMarketParameters, spreaded: bool | None = None): ...
+    #   spreaded=None이면 simmarket.yaml의 커브별 spreaded 값
+    base_zero: dict[RiskFactorKey, float]             # 초기 커브의 격자점 제로금리
+    base_values: dict[RiskFactorKey, float]           # 격자 Quote 기준값 (spreaded 0, 절대는 제로금리)
+    def apply_scenario(self, s: Scenario) -> None: ...  # 기준값 + 이동량, 누적되지 않음
+    def base_reconciliation(self, portfolio: Portfolio, cfg: Config) -> pd.DataFrame: ...
 
-class Trade(BaseModel, ABC):                          # 계약 데이터 (pydantic)
+class Trade(BaseModel, ABC):                          # 계약 데이터 (pydantic), data/portfolio/trade.py
     id: str
     trade_type: str
     def build(self, factory: EngineFactory) -> None: ...
     def npv(self) -> float: ...
 
-class EngineFactory:
-    def __init__(self, engine_data: EngineData, market: Market): ...
-    def builder(self, trade_type: str) -> EngineBuilder: ...
-    def leg_builder(self, leg_type: str) -> LegBuilder: ...
+class EngineFactory:                                  # data/portfolio/enginefactory.py
+    def __init__(self, engine_data: EngineData, market: Market, conventions: Mapping[str, RateConventions]): ...
+    @classmethod
+    def from_config(cls, cfg: Config, market: Market) -> EngineFactory: ...
+    def builder(self, trade_type: str) -> EngineBuilder: ...   # (model, engine)이 engines.yaml과 다르면 KeyError
+    def conventions(self, name: str) -> RateConventions: ...
+    def leg_builder(self, leg_type: str) -> LegBuilder: ...    # 예정
 
 class EngineBuilder(ABC):
-    def engine(self, *keys) -> ql.PricingEngine: ...  # 같은 키면 캐시
+    model: ClassVar[str]; engine_name: ClassVar[str]; trade_types: ClassVar[frozenset[str]]
+    def engine(self, *keys) -> ql.PricingEngine: ...  # 같은 키면 캐시 (ORE CachingEngineBuilder)
 
 @dataclass(frozen=True)
-class RiskFactorKey:
-    key_type: str                                     # "DiscountCurve", "YieldCurve", "EquitySpot", "EquityVolatility" …
-    name: str                                         # "USD", "UST", "SPX"
+class RiskFactorKey:                                  # qle/scenario.py
+    kind: str                                         # "zero", "equity_spot", "dividend_yield", "equity_vol"
+    name: str                                         # "UST", "SPX"
     point: tuple = ()                                 # ("5Y",), ("1Y", 1.00). ORE는 정수 인덱스
 
 @dataclass(frozen=True)
-class Scenario:
-    asof: date
+class Scenario:                                       # analytics/scenario/scenario.py
     label: tuple | str
-    values: dict[RiskFactorKey, float]
+    shifts: dict[RiskFactorKey, float]                # 기준 대비 이동량
 
-class ScenarioGenerator(ABC):
-    def next(self, d: date) -> Scenario: ...
+class ScenarioGenerator(ABC):                         # analytics/scenario/sensitivityscenariogenerator.py
+    def next(self, d: date) -> Scenario: ...          # d가 이전 날짜 이하이면 다음 표본(경로)으로
+    def reset(self) -> None: ...
     def samples(self) -> int: ...
 
-class ValuationEngine:
-    def __init__(self, asof: date, dates: list[date], sim_market: SimMarket): ...
-    def build_cube(self, portfolio: Portfolio) -> pd.DataFrame: ...   # (시나리오, 날짜) × 거래
+class ValuationEngine:                                # analytics/engine/valuationengine.py
+    def __init__(self, asof: date, dates: Sequence[date], sim_market: SimMarket): ...
+    def build_cube(self, portfolio: Portfolio) -> NPVCube: ...   # NPVCube.base, .npv, .pnl, .total_pnl()
 
-class SensitivityAnalysis:
-    def __init__(self, portfolio, market, engine_data, sim_params, sensi_data): ...
+class SensitivityAnalysis:                            # analytics/engine/sensitivityanalysis.py
+    def __init__(self, portfolio: Portfolio, market: Market, cfg: Config,
+                 sim_params: ScenarioSimMarketParameters | None = None,
+                 sensi_data: SensitivityScenarioData | None = None): ...
     def generate_sensitivities(self) -> None: ...
-    def sensi_cube(self) -> SensitivityCube: ...
+    def sensi_cube(self) -> SensitivityCube: ...      # .key_rate_dv01(curve), .parallel_dv01(curve)
 ```
 
 #### 불변 조건
@@ -567,28 +589,30 @@ class SensitivityAnalysis:
 - `TodaysMarket`은 만들어진 뒤 바뀌지 않는다. 바꾸는 것은 `SimMarket`만.
 - 날짜가 다른 시장은 각자의 `active()` 안에서 순차적으로만 평가한다.
 
-### 1.8 현재 코드와 제안 이름의 대응
+### 1.8 재구성 전 이름과의 대응 (기록)
 
-| 현재 (`src/quanttool/`) | 제안 | ORE |
+2026-10-29 재구성(커밋 973172a~d4c7079) 전의 이름이다. 예전 노트·대화에 나오는 이름을 찾을 때만 쓴다.
+
+| 재구성 전 (`src/quanttool/`) | 지금 | ORE |
 |---|---|---|
 | `core/ids.py`, `registry.py` | `data/utilities/` | `ored/utilities/` |
 | `config/qlmap.py` | `data/utilities/parsers.py` | `ored/utilities/parsers.hpp` |
-| `config/` (`YieldCurveConfig`, `TodaysMarketConfig`, `PricingConfig`, `GridConfig`, `SensitivityConfig`) | `data/configuration/` (`YieldCurveConfig`, `TodaysMarketParameters`, `EngineData`, `ScenarioSimMarketParameters`, `SensitivityScenarioData`) | `ored/configuration/`, `orea/scenario/` |
+| `config/` (`TodaysMarketConfig`, `PricingConfig`, `GridConfig`, `SensitivityConfig`) | `data/configuration/` (`TodaysMarketParameters`, `EngineData`, `ScenarioSimMarketParameters`, `SensitivityScenarioData`) | `ored/configuration/`, `orea/scenario/` |
 | `core/dependency.py` | `data/marketdata/dependencygraph.py` | `ored/marketdata/dependencygraph.hpp` |
-| `market/quotes.py` (`Loader`, `QuoteStore`, `UstParCsvLoader`) | `data/marketdata/loader.py` (`Loader`, `CsvLoader`, `DuckDBLoader`, `MarketDatum`) | `ored/marketdata/loader.hpp`, `csvloader.hpp`, `marketdatum.hpp` |
-| `market/market.py` `Market`, `Snapshot` | `Market`, `MarketImpl`, `TodaysMarket` | `market.hpp`, `marketimpl.hpp`, `todaysmarket.hpp` |
-| `market/rates.py` `YieldCurveBuilder`, `bill_price` | `data/marketdata/yieldcurve.py`, `qle/termstructures.py` | `ored/marketdata/yieldcurve.hpp`, QuantExt |
-| `derivatives/trades.py`, `rates.py` `FixedBond`, `portfolio.py` | `data/portfolio/trade.py`, `bond.py` `Bond`, `portfolio.py` | `ored/portfolio/` |
-| `derivatives/factory.py`, `engines.py` | `data/portfolio/enginefactory.py`, `builders/bond.py` | `enginefactory.hpp`, `builders/bond.hpp` |
-| `scenario/grid.py` `ScenarioGrid` | `analytics/scenario/simmarket.py`가 쓰는 `ScenarioSimMarketParameters` | `scenariosimmarketparameters.hpp` |
+| `market/quotes.py` | `data/marketdata/loader.py` | `ored/marketdata/loader.hpp`, `marketdatum.hpp` |
+| `market/market.py` `Snapshot` | `data/marketdata/market.py` `MarketImpl`, `todaysmarket.py` `TodaysMarket` | `marketimpl.hpp`, `todaysmarket.hpp` |
+| `market/rates.py` | `data/marketdata/yieldcurve.py`, `qle/termstructures.py` | `ored/marketdata/yieldcurve.hpp`, QuantExt |
+| `derivatives/` `FixedBond`, `factory.py`, `engines.py` | `data/portfolio/` `Bond`, `enginefactory.py`, `builders/bond.py` | `ored/portfolio/` |
+| `scenario/grid.py` `ScenarioGrid` | `ScenarioSimMarketParameters` (`configs/scenario/simmarket.yaml`) | `scenariosimmarketparameters.hpp` |
 | `scenario/scenario_market.py` `ScenarioMarket` | `analytics/scenario/simmarket.py` `SimMarket`, `ScenarioSimMarket` | `simmarket.hpp`, `scenariosimmarket.hpp` |
-| `scenario/generators.py` `Scenario`, `SensitivityGenerator` + `factors.py` | `scenario.py` `Scenario`, `sensitivityscenariogenerator.py` | `scenario.hpp`, `sensitivityscenariogenerator.hpp` |
-| `scenario/runner.py` `ScenarioRunner`, `ScenarioResults` | `analytics/engine/valuationengine.py`, `sensitivityanalysis.py` | `valuationengine.hpp`, `sensitivityanalysis.hpp` |
-| `analytics/market_monitor.py`, `sensitivity.py` | `analytics/app/marketmonitor.py`, `sensitivityreport.py` | `orea/app/analytics/` |
+| `scenario/generators.py`, `factors.py` | `analytics/scenario/scenario.py`, `sensitivityscenariogenerator.py`, `qle/scenario.py` | `sensitivityscenariogenerator.hpp` |
+| `scenario/runner.py` `ScenarioRunner` | `analytics/engine/valuationengine.py`, `sensitivityanalysis.py` | `valuationengine.hpp`, `sensitivityanalysis.hpp` |
+| `analytics/market_monitor.py`, `sensitivity.py` | `analytics/app/marketmonitor.py`, `SensitivityCube` 메소드 | `orea/app/analytics/` |
 
-### 1.9 사용 흐름 (구현되면 이렇게 쓴다)
+### 1.9 사용 흐름
 
 예시 상황: **미 국채 포트폴리오의 오늘 가격, key rate DV01, 다음 날 theta.** ORE 0.2(5)와 같은 순서다.
+아래 코드는 `DuckDBLoader`(예정)만 빼고 지금 그대로 돌아간다. 합성 샘플로 같은 흐름을 실행하는 것이 `notebooks/tutorial/` 01~05다.
 
 **① 입력: 무엇이 어디에 있나**
 
@@ -597,18 +621,18 @@ class SensitivityAnalysis:
 | `market.duckdb` 뷰 `v_quote` (데이터 플랫폼) | `DuckDBLoader` → `MarketDatum` | `2026-10-23 BOND/YIELD/USD/UST/PAR/10Y 0.0398` |
 | `configs/conventions/rates.yaml` | `Conventions` | `UST: {calendar: UnitedStates.GovernmentBond, day_count: ActualActual.Bond, settlement_days: 1, frequency: Semiannual, …}` |
 | `configs/market/curves/ust.yaml` | `YieldCurveConfig` | 세그먼트: bill(1M~1Y) `ZeroCouponBill`, 쿠폰채(2Y~30Y) `FixedRateBond`; 시세 키 접두어; 보간 `LogCubic(Discount)` |
-| `configs/market/todaysmarket.yaml` | `TodaysMarketParameters` | `yield_curves: {UST: UST}`, `discount_curves: {USD: UST}` (만들 시장 객체 → 레시피) |
+| `configs/market/todaysmarket.yaml` | `TodaysMarketParameters` | `yield_curves: [UST]` (만들 시장 객체; `discount_curves: {USD: UST}` 예정) |
 | `configs/pricing/engines.yaml` | `EngineData` | `Bond: {model: DiscountedCashflows, engine: DiscountingBondEngine}` |
 | `positions/ust_book.yaml` | `Portfolio` → `Bond` | `{id: UST_10Y, trade_type: Bond, notional: 1e7, coupon: 0.04125, issue: 2026-08-15, maturity: 2036-08-15, conventions: UST, discount: UST}` |
-| `configs/scenario/simmarket.yaml` | `ScenarioSimMarketParameters` | `UST: {tenors: [1M, …, 30Y], interpolation: LinearZero, spreaded: true}` |
-| `configs/scenario/sensitivity.yaml` | `SensitivityScenarioData` | `UST: {shift_type: absolute, shift_size: 0.0001, scheme: forward, par_instruments: [Bill…, Bond…]}` |
+| `configs/scenario/simmarket.yaml` | `ScenarioSimMarketParameters` | `UST: {tenors: [1M, …, 30Y], interpolation: Linear(Zero), spreaded: true, roll_down: ForwardForward}` |
+| `configs/scenario/sensitivity.yaml` | `SensitivityScenarioData` | `key_rate_bp: 1.0, parallel_bp: 1.0` (par 변환 상품은 `ParSensitivityAnalysis`와 함께 예정) |
 
 **② 코드**
 
 ```python
 from datetime import date
 from quanttool.data.configuration import load_config                       # data/configuration/__init__.py
-from quanttool.data.marketdata import DuckDBLoader, TodaysMarket            # data/marketdata/loader.py, todaysmarket.py
+from quanttool.data.marketdata import DuckDBLoader, TodaysMarket            # data/marketdata/loader.py(DuckDBLoader 예정), todaysmarket.py
 from quanttool.data.portfolio import EngineFactory, Portfolio                # data/portfolio/enginefactory.py, portfolio.py
 from quanttool.analytics.scenario import ScenarioSimMarket                  # analytics/scenario/simmarket.py
 from quanttool.analytics.engine import SensitivityAnalysis                  # analytics/engine/sensitivityanalysis.py
@@ -629,19 +653,20 @@ loader = DuckDBLoader("~/data/market.duckdb")
 #    loader.load(asof) → [MarketDatum(asof, "BOND/YIELD/USD/UST/PAR/1M", 0.0402), …]
 
 # 3) 시장 조립: 레시피 + 시세 → TodaysMarket (asof 고정, 이후 불변)
-market = TodaysMarket(asof, cfg.todaysmarket, loader, cfg.curve_configs, cfg.conventions)
+market = TodaysMarket.from_config(asof, cfg, loader)
+#    = TodaysMarket(asof, cfg.todaysmarket, loader, cfg.curve_configs, cfg.conventions)
 #    내부 (data/marketdata/todaysmarket.py):
 #      DependencyGraph로 순서 결정 (스왑 커브가 할인 커브에 의존하면 할인 커브 먼저)
-#      CURVE_BUILDERS["YieldCurve"] = YieldCurveBuilder (data/marketdata/yieldcurve.py)
+#      BUILDERS["YieldCurve"] = YieldCurveBuilder (data/marketdata/yieldcurve.py), 평가일 = asof로 두고 실행
 #        시세 키 → SimpleQuote → 세그먼트별 헬퍼 (bill: BondHelper(ZeroCouponBond, 가격=qle.bill_price(y)),
 #                                            쿠폰채: BondHelper(FixedRateBond, 가격=DerivedQuote(y)))
-#        → ql.PiecewiseLogCubicDiscount(asof, helpers, Act365) → RelinkableHandle
-#      MarketImpl 보관소에 등록: yield_curve("UST"), discount_curve("USD")
+#        → ql.PiecewiseLogCubicDiscount(asof, helpers, Act365) → freeze() → RelinkableHandle
+#      MarketImpl 보관소에 등록: yield_curve("UST")
 curve_table(market, "UST", cfg)               # 할인계수, 제로, 1Y 선도, par (analytics/app/marketmonitor.py)
 
 # 4) 포트폴리오 조립: 계약 데이터 → QuantLib 상품 + 엔진
 book = Portfolio.load("positions/ust_book.yaml")          # Trade 데이터 (pydantic), 아직 QuantLib 객체 없음
-factory = EngineFactory(cfg.engine_data, market)          # data/portfolio/enginefactory.py
+factory = EngineFactory.from_config(cfg, market)          # = EngineFactory(cfg.engine_data, market, cfg.conventions)
 with market.active():                                     # evaluationDate = asof
     book.build(factory)
     #  Bond.build (data/portfolio/bond.py):
@@ -652,33 +677,34 @@ with market.active():                                     # evaluationDate = aso
     book.npvs()                                           # 거래별 NPV (pandas)
 
 # 5) 민감도: 시뮬레이션 시장에서 흔들고 반복 평가 (ORE SensitivityAnalysis와 같은 순서)
-sa = SensitivityAnalysis(book, market, cfg.engine_data, cfg.simmarket, cfg.sensitivity)
+sa = SensitivityAnalysis(book, market, cfg)               # sim_params·sensi_data 기본값 = cfg.simmarket, cfg.sensitivity
 sa.generate_sensitivities()
 #  내부 (analytics/engine/sensitivityanalysis.py):
-#    a) sim = ScenarioSimMarket(market, cfg.simmarket, spreaded=True)
+#    a) sim = ScenarioSimMarket(market, cfg.simmarket)          # spreaded (simmarket.yaml)
 #         market.yield_curve("UST")를 1M…30Y에서 샘플 → 격자 SimpleQuote(이동량 0)
-#         커브 = 원래 커브 + 보간된 이동량 (qle/termstructures.py) → 기준 상태에서 원래 커브와 같음
-#    b) gen = SensitivityScenarioGenerator(cfg.sensitivity, sim.base_scenario())
+#         커브 = PiecewiseZeroSpreadedTermStructure(원래 커브, 격자 Quote) → 기준 상태에서 원래 커브와 같음
+#    b) gen = SensitivityScenarioGenerator(cfg.simmarket, cfg.sensitivity)
 #         [기준, UST 1M +1bp, …, UST 30Y +1bp, UST 평행 +1bp]
 #    c) sim.scenario_generator = gen
-#    d) book.build(EngineFactory(cfg.engine_data, sim))     # 같은 계약을 시뮬레이션 시장에 다시 연결
+#    d) book.build(EngineFactory.from_config(cfg, sim))     # 같은 계약을 시뮬레이션 시장에 다시 연결
 #    e) ValuationEngine(asof, [asof], sim).build_cube(book) # 시나리오마다 sim.update(asof) → npvs() → 표 한 행
-#    f) (흔든 NPV − 기준 NPV) / shift → 델타
+#    f) SensitivityCube(cube, sensi_data): (흔든 NPV − 기준 NPV) / shift → 델타
 sa.sensi_cube().key_rate_dv01("UST")                       # 만기 × 거래 표
 sa.sensi_cube().parallel_dv01("UST")
 
 # 6) 시간 경과: 시장 그대로, 평가일만 하루 이동 → theta
 sim = ScenarioSimMarket(market, cfg.simmarket)
-book.build(EngineFactory(cfg.engine_data, sim))
 with sim.active():
+    book.build(EngineFactory.from_config(cfg, sim))
     base = book.npvs()
-    sim.update(date(2026, 10, 26))                          # 다음 영업일, 시나리오 없음(기준) → 평가일 이동
+sim.update(date(2026, 10, 26))                              # 다음 영업일, 생성기 없음 → 기준 시나리오, 평가일 이동
+with sim.active():                                          # 기준 커브는 ForwardForward로 굴러 있음
     theta = book.npvs() - base
+sim.reset()
 
 # 7) 날짜별 커브 이력: 날짜마다 TodaysMarket을 만들고 결과만 표로 (객체는 버림)
-history = {d: curve_table(TodaysMarket(d, cfg.todaysmarket, loader, cfg.curve_configs, cfg.conventions),
-                          "UST", cfg)["zero_cc"]
-           for d in dates}
+history = {d: curve_table(TodaysMarket.from_config(d, cfg, loader), "UST", cfg)["zero_cc"]
+           for d in loader.dates()}
 ```
 
 **③ 정리**: 사용자가 만지는 것은 `configs/`, `positions/`, 데이터 DB뿐이다. ①~④는 `data`, ⑤~⑥은 `analytics`다.
@@ -714,12 +740,16 @@ segments:
   - {type: FixedRateBond,  quote_family: UST, quote_field: PAR, tenors: [2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y]}
 interpolation: LogCubic(Discount)
 
-# configs/scenario/simmarket.yaml (← grid.yaml)
-yield_curves:
-  UST: {tenors: [1M, 3M, 6M, 9M, 1Y, 18M, 2Y, 3Y, 4Y, 5Y, 6Y, 7Y, 8Y, 9Y, 10Y, 12Y, 15Y, 20Y, 25Y, 30Y],
-        interpolation: LinearZero, extrapolation: FlatZero, spreaded: true}
+# configs/scenario/simmarket.yaml (구현됨)
+UST:
+  kind: zero
+  tenors: [1M, 3M, 6M, 9M, 1Y, 18M, 2Y, 3Y, 4Y, 5Y, 6Y, 7Y, 8Y, 9Y, 10Y, 12Y, 15Y, 20Y, 25Y, 30Y]
+  interpolation: Linear(Zero)
+  extrapolation: flat_zero
+  spreaded: true
+  roll_down: ForwardForward
 
-# configs/pricing/engines.yaml (EngineData)
+# configs/pricing/engines.yaml (EngineData; Bond만 구현됨)
 Bond:          {model: DiscountedCashflows, engine: DiscountingBondEngine}
 Swap:          {model: DiscountedCashflows, engine: DiscountingSwapEngine}
 EquityOption:  {model: BlackScholes, engine: AnalyticEuropeanEngine}
@@ -735,15 +765,15 @@ Autocallable:  {model: LocalVol,     engine: MonteCarlo, params: {paths: 100000}
 
 | 항목 | 내용 | 현재 방향 |
 |---|---|---|
-| 구조·이름 | 자체 이름(Snapshot, ScenarioMarket …) vs ORE 이름 | **ORE 구조·이름을 따른다** (1.6, 1.7, 제안) |
+| 구조·이름 | 자체 이름 vs ORE 이름 | **ORE 구조·이름을 따른다** (1.6, 1.7, 구현됨) |
 | 데이터 | 이 레포 `pipeline/` vs 별도 프로젝트 | **별도 프로젝트 `market-data` + DuckDB** (`docs/data_platform.md`) |
 | 범위 | 신용 포함 여부 | **신용(CDS, 해저드율, XVA, 담보) 제외** |
 | 시나리오 시장 방식 | 원래 시세 bump vs ORE식 격자 재표현 | **격자 재표현** (PCA·과거 재현과 좌표 일치, 속도, vol 지역성) |
-| 격자 커브 모드 | 절대(현재 구현) vs spreaded(ORE `SpreadedDiscountCurve`) | **spreaded 기본**. 기준 대사 오차 0(현재 절대 모드는 합성 샘플 기준 최대 5.1e-4, 30Y). 절대는 옵션 |
-| 커브 기준일 | TodaysMarket: 평가일 따라 이동(현재) vs asof 고정(ORE) | **asof 고정**. 시간 이동은 SimMarket이 맡는다 |
-| 시간 축 | 고정 기준일 시나리오만(현재) | `SimMarket.update(date)`로 theta·P&L explain |
+| 격자 커브 모드 | 절대 vs spreaded(ORE `SpreadedDiscountCurve`) | **spreaded 기본**(구현됨). 기준 대사 오차 ≈1e-16(절대 모드는 합성 샘플 기준 최대 5.1e-4, 30Y). 절대는 `spreaded=False` |
+| 커브 기준일 | TodaysMarket: 평가일 따라 이동 vs asof 고정(ORE) | **asof 고정 + freeze**(구현됨, `preserve_quote_linkage=True`면 시세 연결 유지). 시간 이동은 SimMarket이 맡는다 |
+| 시간 축 | 고정 기준일 시나리오만 vs 날짜 이동 | `SimMarket.update(date)`(구현됨, ForwardForward roll)로 theta. P&L explain은 예정 |
 | 전역 평가일 | 날짜 다른 시장 동시 평가 시 조용한 오류 | 시장마다 `active()`, 순차 평가 |
-| 엔진 요청 방식 | `factory.engine_for(trade)`(현재) vs `factory.builder(type).engine(키)`(ORE) | ORE 방식 |
+| 엔진 요청 방식 | `factory.engine_for(trade)` vs `factory.builder(type).engine(키)`(ORE) | ORE 방식(구현됨) |
 | 관례 보관 | ORE 전역 `InstrumentConventions` vs 설정 객체 전달 | 설정 객체 전달 (전역 상태를 늘리지 않음) |
 | Index fixing 전역 공유 | 시나리오가 기준 시장 fixing을 오염 | fixing은 구축 시 1회 로드, 시나리오에서 수정 금지 |
 | IV 서페이스 흔들기 | 호가 bump 시 재피팅이 변화를 번지게 함, 느림 | 격자 재표현으로 해결 |
@@ -756,7 +786,7 @@ Autocallable:  {model: LocalVol,     engine: MonteCarlo, params: {paths: 100000}
 
 ### 2.2 현황
 
-최종 갱신 2026-10-28. 브랜치 `claude/confident-hamilton-ui198k`, PR https://github.com/wnsdydchl0/quant-tool/pull/1
+최종 갱신 2026-10-29. 브랜치 `claude/confident-hamilton-ui198k`, PR https://github.com/wnsdydchl0/quant-tool/pull/1
 
 시작하기
 ```bash
@@ -768,31 +798,30 @@ scripts/fetch_references.sh                              # QuantLib-SWIG, ORE En
 python -m pytest -q && ruff check . && ruff format --check .
 ```
 - `pytest`는 `python -m pytest`로 돌린다. PATH의 `pytest`가 QuantLib 없는 다른 환경을 가리킬 수 있다.
-- 처음이면 `notebooks/tutorial/` 00~04를 순서대로 실행하며 코드 위치를 따라간다(현재 이름 기준).
+- 처음이면 `notebooks/tutorial/` 00~05를 순서대로 실행하며 코드 위치를 따라간다.
 - `tests/fixtures/ust_par_sample.csv`는 재무부 CSV와 형식만 같은 합성 샘플이다. 실제 데이터는 아직 연결 전이다.
 
-완료 (현재 이름 기준)
-- 첫 줄기 (UST 커브 → 국채 → key rate DV01): core, config, market, derivatives, scenario, analytics, 노트북 `01_ust_curve`.
-- 튜토리얼 노트북 5개.
-- 테스트 81개. 완료 기준 (합성 샘플 기준):
+완료
+- 첫 줄기 (UST 커브 → 국채 → key rate DV01), 노트북 `01_ust_curve`.
+- ORE 구조로 재구성: `qle` / `data`(utilities, configuration, marketdata, portfolio) / `analytics`(scenario, engine, app).
+  `Market`/`MarketImpl`/`TodaysMarket`(asof 고정, freeze), `SimMarket`/`ScenarioSimMarket`(`update`, spreaded),
+  `EngineFactory.builder`, `ValuationEngine`/`NPVCube`, `SensitivityAnalysis`/`SensitivityCube`.
+- 튜토리얼 노트북 6개(00~05).
+- 테스트 94개. 완료 기준 (합성 샘플 기준):
 
 | 기준 | 결과 |
 |---|---|
 | 헬퍼 재가격 오차 < 0.01bp | 약 1e-9bp |
 | QuantLib 직접 조립 채권과 NPV 일치 | 상대오차 1e-12 이내 |
-| Σ key rate DV01 = 평행 DV01 | −8,245.95 대 −8,246.30 (한쪽 차분의 2차 항만큼 차이) |
-| 격자 시장 기준 NPV ≈ 스냅샷 NPV (절대 모드) | 최대 상대오차 5.1e-4 (30Y) |
-| 평행 DV01 vs QuantLib 직접 1bp 이동 | 1e-3 이내 |
+| 시뮬레이션 시장 기준 NPV ≈ 초기 시장 NPV (spreaded) | 상대오차 < 1e-12 (실측 ≈4e-16). 절대 모드는 최대 5.1e-4 (30Y) |
+| Σ key rate DV01 = 평행 DV01 | −8,252.07 대 −8,252.41 (한쪽 차분의 2차 항만큼 차이) |
+| 평행 DV01 vs QuantLib 직접 1bp 이동 (`ZeroSpreadedTermStructure`) | 1e-10 이내 |
+| `update(d)` 후 커브 vs `ImpliedTermStructure(초기 커브, d)` | 1e-12 이내 (theta 경로) |
+| `TodaysMarket`은 다른 날짜 시장·평가일 변경과 무관 | 기준일·할인계수 불변 (테스트) |
 
 ### 2.3 다음 단계
-1. **ORE 구조로 재구성** (이 문서 승인 후, 커밋 단위)
-   1. 패키지 이동·이름 변경(동작 불변, 테스트 그대로 통과).
-   2. `MarketImpl` 분리 + `TodaysMarket` asof 고정.
-   3. `SimMarket`/`ScenarioSimMarket`: `update(date)`, spreaded 모드.
-   4. `EngineFactory.builder` 방식, `ValuationEngine`, `SensitivityAnalysis`.
-   5. 튜토리얼 노트북 새 이름으로 재생성, `05_curve_history`(날짜별 시장 → 표, theta).
-2. **데이터 플랫폼** (`docs/data_platform.md` 9장): `market-data` 레포, DuckDB 스키마, FRED 수집기 → QuantTool `DuckDBLoader`.
-3. `ParSensitivityAnalysis`: 격자 민감도 → 국채·스왑 par 민감도(헷지 수량).
-4. KRW 국채·IRS, USD SOFR 커브와 `Swap`·`LegBuilder`.
-5. `factorhistory`: 날짜별 격자값 → `risk_factors` 표. 옵션 체인 일별 적재 시작.
-6. PCA 시나리오 → 주식 줄기 → P&L explain·과거 재현 → 오토콜·LV.
+1. **데이터 플랫폼** (`docs/data_platform.md` 9장): `market-data` 레포, DuckDB 스키마, FRED 수집기 → QuantTool `DuckDBLoader`.
+2. `ParSensitivityAnalysis`: 격자 민감도 → 국채·스왑 par 민감도(헷지 수량).
+3. KRW 국채·IRS, USD SOFR 커브와 `Swap`·`LegBuilder`, `Market.discount_curve`·`index`.
+4. `factorhistory`: 날짜별 격자값 → `risk_factors` 표. 옵션 체인 일별 적재 시작.
+5. PCA 시나리오 → 주식 줄기 → P&L explain·과거 재현 → 오토콜·LV.
