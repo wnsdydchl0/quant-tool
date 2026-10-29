@@ -1,15 +1,11 @@
 # QuantTool 아키텍처
-
-설계 기준 문서. ORE 학습용 예시는 `docs/ore_walkthrough.md`, 데이터 수집·저장은 `market-data` 레포 `docs/design.md`.
-
 ---
 
 ## 0. 레퍼런스
 
-### 0.1 QuantLib: 한 상품을 정확히 평가하는 부품 상자
+### 0.1 QuantLib 
 
-QuantLib은 **시장 상태를 표현하는 객체와 계약을 표현하는 객체를 만들고, 둘을 엔진으로 이어 가격을 내는 부품**을 층별로 제공한다.
-조립은 사용자가 직접 한다.
+QuantLib은 시장 상태, 계약, 프라이싱 모델을 표현하는 객체적 기반을 제공한다. 
 
 ```
 0. 기반
@@ -28,40 +24,19 @@ QuantLib은 **시장 상태를 표현하는 객체와 계약을 표현하는 객
    - 패키지 함수 : CashFlows, BondFunctions (외부 가정이 필요하거나 여러 상품 공통)
 ```
 
-층을 잇는 장치 세 가지가 QuantLib 설계의 핵심이다.
-- **Handle**: 객체가 아니라 객체가 놓인 "자리"를 가리킨다. `RelinkableHandle.linkTo`로 자리의 내용을 통째로 바꾸면,
-  그 자리를 쓰는 모든 상품에 한 번에 적용된다.
-- **Observer**: Quote → 커브 → 엔진 → 상품으로 변경 알림이 이어진다. 바뀐 것에 의존하는 것만 "낡음" 표시가 된다.
-- **LazyObject**: 실제로 값을 물을 때만 다시 계산한다.
-
-그래서 시장 입력을 `SimpleQuote`로 두고 구조물을 그 Quote에 연결해 만들면, "Quote 값 변경 → 재평가 → 원복"만으로 민감도와 시나리오가 끝난다.
-엔진은 **생성될 때 시장 재료**(커브·Process 핸들)를 쥐고, **계산할 때 계약 조건**(arguments)을 받는다.
-
-주의할 전역 상태: `Settings.evaluationDate`는 하나뿐이라 날짜가 다른 시장을 동시에 평가할 수 없다. Index fixing도 지수 이름으로 전역 공유된다.
-
-학습 자료
-- A QuantLib Guide (https://www.quantlibguide.com/) — Library infrastructure 파트 정독, 나머지는 사전처럼.
-- Implementing QuantLib (Ballabio) — 설계 이유.
-- Context7: `/lballabio/quantlib`, `/lballabio/quantlib-swig`(파이썬 예제가 더 많음).
-- 직접 해 보기: `notebooks/tutorial/00_quantlib_basics.ipynb`
+참고자료
+- A QuantLib Guide (https://www.quantlibguide.com/) 
+- Implementing QuantLib (Ballabio)
+- Context7: `/lballabio/quantlib`, `/lballabio/quantlib-swig`(파이썬 예제가 더 많음).  
+  
+  
+(일부러 간략하게 날린거야. )
 
 ### 0.2 ORE: 데이터로부터 시장과 계약을 조립해, 포트폴리오를 정합적으로 평가하고 흔드는 시스템
 
-근거: ORE 원본 `references/Engine`(GitHub `OpenSourceRisk/Engine`), 설계 문서 `Docs/Design/ore_design.tex`
-(= https://rkapl123.github.io/ore_design.pdf), 파이썬 바인딩 `references/ORE-SWIG`. Context7에는 ORE가 없어서 원본을 직접 읽는다.
-
-#### (1) 세 라이브러리
-
-> "QuantLib은 개별 상품과 그 평가·분석에 초점을 두고, ORE는 (단순 합산이 아닌) 포트폴리오 분석을 목표로 한다." — 설계 문서 Introduction
-
-| 라이브러리 | 역할 | QuantLib과의 관계 |
-|---|---|---|
-| **QuantExt** | QuantLib 확장: 상품, 엔진, 커브, 모델. QuantLib과 **같은 폴더·클래스 구조** | QuantLib에 없는 부품을 같은 규격으로 보탠다. QuantLib 버그는 원본을 고치지 않고 해당 클래스를 복사해 고친다 |
-| **OREData** | **번역과 조립.** 외부 표현(XML 설정, 시세 파일)을 QuantLib 객체로 번역하고, 그것으로 **Market, Portfolio, Model**을 조립 | 이것만으로 시장 구축, 커브 부트스트랩, 포트폴리오 로드, 현재가치·현금흐름 계산까지 가능 |
-| **OREAnalytics** | **활용.** OREData의 세 객체를 입력으로 받아 시나리오·시뮬레이션 기반 위험 분석 | 핵심은 Market 규격을 그대로 가지면서 바꿀 수 있는 `SimMarket` |
-
-QuantLib 층위 위에 **"조립 → 활용"** 두 단을 얹은 구조다. "Data"는 데이터를 저장한다는 뜻이 아니라 **데이터를 객체로 바꾸는 층**이라는 뜻이다.
-
+ORE는 시장상태를 표현할 수 있는 기본 단위와 이들을 포괄하는 객체적 기반과 이를 활용한 민감도/시나리오 분석 기능을 제공한다. 
+시장을 객체화하고 민감도/시나리오 분석을 할 수 있는 구조를 참고한다. 
+  
 ```
 [QuantLib + QuantExt]   부품: Date·Quote·커브·헬퍼·Instrument·PricingEngine·Model
         │
@@ -80,8 +55,11 @@ QuantLib 층위 위에 **"조립 → 활용"** 두 단을 얹은 구조다. "Dat
    └ app/               OREApp + Analytic(Pricing, Sensitivity, Stress, VaR, …), InputParameters
 ```
 
-#### (2) OREData의 세 객체와 Market 계층
+참고자료  < - 이거는 아래 말미 학습자료랑 합치고, Quantlib 에서처럼  불릿포인트로 깔끔하게  참고 정리해줘.   
+ORE 원본 `references/Engine`(GitHub `OpenSourceRisk/Engine`), 설계 문서 `Docs/Design/ore_design.tex`
+(= https://rkapl123.github.io/ore_design.pdf), 파이썬 바인딩 `references/ORE-SWIG`. Context7에는 ORE가 없어서 원본을 직접 읽는다.
 
+그리고 이자식아 그냥 0.2 파트 전체를 리뉴얼해. 아니, 폴더 자체가 기능별로 구현되어있으니까 저렇게 구분해준건 좋은데, 각 객체/클래스 별로 어떤 상속구조, 무엇을 인자로 요구하고 맞물려 가면서 동작하는지에 대한 거를 아래를 보고 누가파악하냐. 전면 리뉴얼해라. 차라리 구조적인 거는 간략하게 인자나호출 흐름만 적고, ORE 설명 파일에 따로 정리하던가. 근데 CPP 기준으로 서술되어있으니 그것도 python 유저가 이해할 수 있게 수정해서 설명해. 
 | 객체 | 추상화하는 것 | 내용 |
 |---|---|---|
 | **Market** | 한 시점의 시장 상태 | 커브·지수·변동성·스팟을 이름(키)으로 조회 |
@@ -361,7 +339,7 @@ QuantLib의 부품을 쓰고, ORE의 구조(QuantExt / OREData / OREAnalytics)�
 - 툴은 **정해진 규칙과 파라미터로 계산**한다. 추정은 툴 밖에서 하고, 툴 안에서는 적용만 한다.
 - 툴의 쓸모: (1) 시장 상태 모니터링(커브·서페이스·요인), (2) 포지션의 가격·민감도·시나리오 손익, (3) 다른 프로젝트에 시장 요인 시계열 제공.
 
-### 1.4 범위
+### 1.4 범위 <- 이 섹션 알아서 삭제해. 
 
 | 영역 | 선형 | 바닐라 | 이색 |
 |---|---|---|---|
@@ -369,7 +347,8 @@ QuantLib의 부품을 쓰고, ORE의 구조(QuantExt / OREData / OREAnalytics)�
 | 주식 | 구현 (할인·배당·레포, implied forward) | 구현 (IV 서페이스, 그릭스, implied vs realized) | 구현 (LV 캘리브레이션, 오토콜 등) |
 
 - 진행 순서: 금리 선형 → 주식 선형 → 주식 바닐라 → 주식 이색.
-- 시간 배분 목표: 인프라 30%, 분석(시장 해석 노트북) 70%. 모듈 하나를 만들 때마다 그 모듈로 실제 시장을 읽는 노트북 하나를 붙인다.
+- 시간 배분 목표: 인프라 30%, 분석(시장 해석 노트북) 70%. 모듈 하나를 만들 때마다 그 모듈로 실제 시장을 읽는 노트북 하나를 붙인다.  
+  
 
 ### 1.5 설계 원칙
 
@@ -587,7 +566,7 @@ class SensitivityAnalysis:                            # analytics/engine/sensiti
 - `TodaysMarket`은 만들어진 뒤 바뀌지 않는다. 바꾸는 것은 `SimMarket`만.
 - 날짜가 다른 시장은 각자의 `active()` 안에서 순차적으로만 평가한다.
 
-### 1.8 재구성 전 이름과의 대응 (기록)
+### 1.8 재구성 전 이름과의 대응 (기록) <- 그리고모두 이름 변경했으면 반영하고 이것도 삭제해 괜히 안헷갈리게. 
 
 2026-10-29 재구성(커밋 973172a~d4c7079) 전의 이름이다. 예전 노트·대화에 나오는 이름을 찾을 때만 쓴다.
 
