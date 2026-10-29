@@ -35,21 +35,31 @@ def _direct_npv(trade: Bond, cfg, curve) -> float:
 
 def test_npv_matches_direct_quantlib(cfg, snap, portfolio):
     with snap.active():
-        portfolio.build(EngineFactory(snap, cfg))
+        portfolio.build(EngineFactory.from_config(cfg, snap))
         for t in portfolio:
             assert t.npv() == pytest.approx(_direct_npv(t, cfg, snap.yield_curve("UST")), rel=1e-12)
 
 
 def test_engine_cached_per_curve(cfg, snap, portfolio):
-    factory = EngineFactory(snap, cfg)
-    engines = {id(factory.engine_for(t)) for t in portfolio}
-    assert len(engines) == 1
+    factory = EngineFactory.from_config(cfg, snap)
+    builder = factory.builder("Bond")
+    assert factory.builder("Bond") is builder  # 상품 유형당 빌더 하나
+    engines = {id(builder.engine(t.discount)) for t in portfolio}
+    assert len(engines) == 1  # 같은 할인 커브 → 같은 엔진 (ORE CachingEngineBuilder)
+
+
+def test_engine_data_mismatch_rejected(cfg, snap):
+    from quanttool.data.configuration import EngineData
+
+    bad = EngineData({"Bond": {"model": "BlackScholes", "engine": "DiscountingBondEngine"}})
+    with pytest.raises(KeyError, match="맞지 않는다"):
+        EngineFactory(bad, snap, cfg.conventions).builder("Bond")
 
 
 def test_npv_reacts_to_quote(cfg, linked_snap, portfolio):
     snap = linked_snap
     with snap.active():
-        portfolio.build(EngineFactory(snap, cfg))
+        portfolio.build(EngineFactory.from_config(cfg, snap))
         before = portfolio.trades["UST_10Y"].npv()
         snap.quotes["UST/PAR/10Y"].setValue(snap.quotes["UST/PAR/10Y"].value() + 0.0001)
         after = portfolio.trades["UST_10Y"].npv()
@@ -76,4 +86,6 @@ def test_portfolio_errors(cfg, snap):
     with pytest.raises(RuntimeError):
         p.npv()
     with pytest.raises(KeyError, match="KRW"):
-        Portfolio.from_records([{**rec, "discount": "KRW"}]).build(EngineFactory(snap, cfg))
+        Portfolio.from_records([{**rec, "discount": "KRW"}]).build(
+            EngineFactory.from_config(cfg, snap)
+        )

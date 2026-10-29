@@ -13,9 +13,16 @@ from .scenario import Scenario
 
 
 class ScenarioGenerator(ABC):
-    """시나리오를 차례로 내준다. SimMarket.update(d)는 next(d)로 하나씩 받는다 (ORE와 같은 방식)."""
+    """시나리오를 차례로 내준다. SimMarket.update(d)는 next(d)로 받는다 (ORE와 같은 방식).
+
+    next(d)는 지금 표본(경로)의 날짜 d 시나리오를 준다. 날짜가 앞으로 가면 같은 표본에 머물고,
+    날짜가 처음(이전 이하)으로 돌아오면 다음 표본으로 넘어간다. 민감도·스트레스처럼 시간에
+    따라 변하지 않는 시나리오는 표본 하나가 모든 날짜에 같다.
+    """
 
     _iter: Iterator[Scenario] | None = None
+    _current: Scenario | None = None
+    _last_date: date | None = None
 
     @abstractmethod
     def generate(self) -> Iterable[Scenario]: ...
@@ -23,10 +30,19 @@ class ScenarioGenerator(ABC):
     def next(self, d: date) -> Scenario:
         if self._iter is None:
             self._iter = iter(self.generate())
-        return next(self._iter)
+        if self._current is None or self._last_date is None or d <= self._last_date:
+            self._current = next(self._iter)
+        self._last_date = d
+        return self._current
 
     def reset(self) -> None:
         self._iter = None
+        self._current = None
+        self._last_date = None
+
+    def samples(self) -> int:
+        """시나리오(표본) 개수 (ORE ScenarioGenerator::samples)."""
+        return sum(1 for _ in self.generate())
 
 
 class SensitivityScenarioGenerator(ScenarioGenerator):

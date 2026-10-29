@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from collections.abc import Hashable
-from typing import Any
 
 import QuantLib as ql
 
@@ -16,8 +15,10 @@ from quanttool.data.utilities.registry import ENGINE_BUILDERS
 
 @ENGINE_BUILDERS.register("DiscountingBondEngine")
 class DiscountingBondEngineBuilder(EngineBuilder):
-    def cache_key(self, trade: Any) -> Hashable:
-        return trade.discount
+    model = "DiscountedCashflows"
+    engine_name = "DiscountingBondEngine"
+    trade_types = frozenset({"Bond"})
 
-    def make(self, trade: Any) -> ql.PricingEngine:
-        return ql.DiscountingBondEngine(self.market.yield_curve(trade.discount))
+    def make(self, *keys: Hashable) -> ql.PricingEngine:
+        (discount_curve,) = keys
+        return ql.DiscountingBondEngine(self.market.yield_curve(discount_curve))

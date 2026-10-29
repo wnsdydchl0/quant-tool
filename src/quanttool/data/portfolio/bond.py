@@ -51,5 +51,6 @@ class Bond(Trade):
             100.0,
             to_ql_date(self.issue_date),
         )
-        bond.setPricingEngine(factory.engine_for(self))
+        builder = factory.builder(self.trade_type)
+        bond.setPricingEngine(builder.engine(self.discount))
         self._wrapper = InstrumentWrapper(bond, self.notional / 100.0)

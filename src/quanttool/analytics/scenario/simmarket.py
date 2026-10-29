@@ -61,6 +61,7 @@ class SimMarket(MarketImpl):
         super().__init__(asof)
         self.date = asof
         self.scenario_generator: ScenarioGenerator | None = None
+        self.scenario: Scenario | None = None  # 지금 적용된 시나리오 (None = 기준)
 
     def active(self):
         """현재 시뮬레이션 날짜로 evaluationDate를 둔 컨텍스트."""
@@ -166,10 +167,12 @@ class ScenarioSimMarket(SimMarket):
                 )
         for key, quote in self.sim_data.items():
             quote.setValue(self.base_values[key] + scenario.shifts.get(key, 0.0))
+        self.scenario = scenario
 
     def _reset_quotes(self) -> None:
         for key, quote in self.sim_data.items():
             quote.setValue(self.base_values[key])
+        self.scenario = None
 
     def _roll(self, d: date) -> None:
         for name, base in self._base_links.items():
@@ -189,10 +192,10 @@ class ScenarioSimMarket(SimMarket):
         from quanttool.data.portfolio import EngineFactory
 
         with self.init_market.active():
-            portfolio.build(EngineFactory(self.init_market, cfg))
+            portfolio.build(EngineFactory.from_config(cfg, self.init_market))
             base = portfolio.npvs()
         with self.active():
-            portfolio.build(EngineFactory(self, cfg))
+            portfolio.build(EngineFactory.from_config(cfg, self))
             grid = portfolio.npvs()
         out = pd.DataFrame({"base_npv": base, "grid_npv": grid})
         out["diff"] = out["grid_npv"] - out["base_npv"]

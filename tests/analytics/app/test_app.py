@@ -3,9 +3,7 @@ import math
 import pytest
 
 from quanttool.analytics.app.marketmonitor import curve_shape, curve_table
-from quanttool.analytics.app.sensitivityreport import key_rate_dv01, parallel_dv01
-from quanttool.analytics.engine import ValuationEngine
-from quanttool.analytics.scenario import ScenarioSimMarket, SensitivityScenarioGenerator
+from quanttool.analytics.engine import SensitivityAnalysis
 
 
 def test_curve_table_par_reproduces_market_quotes(cfg, snap):
@@ -28,12 +26,10 @@ def test_curve_shape(cfg, snap):
 
 
 def test_sensitivity_tables(cfg, snap, portfolio):
-    grid = cfg.simmarket
-    res = ValuationEngine(portfolio, ScenarioSimMarket(snap, grid), cfg).run(
-        SensitivityScenarioGenerator(grid, cfg.sensitivity).generate()
-    )
-    krd = key_rate_dv01(res, cfg.sensitivity, "UST")
-    par = parallel_dv01(res, cfg.sensitivity, "UST")
+    sa = SensitivityAnalysis(portfolio, snap, cfg)
+    sa.generate_sensitivities()
+    krd = sa.sensi_cube().key_rate_dv01("UST")
+    par = sa.sensi_cube().parallel_dv01("UST")
     assert list(krd.index) == cfg.simmarket.root["UST"].tenors
     assert krd["total"].sum() == pytest.approx(krd.drop(columns="total").sum().sum())
     assert krd["total"].sum() == pytest.approx(par["total"], rel=5e-4)

@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 import QuantLib as ql
 
-from quanttool.analytics.engine import ValuationEngine
+from quanttool.analytics.engine import SensitivityAnalysis, ValuationEngine
 from quanttool.analytics.scenario import Scenario, ScenarioSimMarket, SensitivityScenarioGenerator
 from quanttool.analytics.scenario.simmarket import GRID_DAY_COUNTER, sample
 from quanttool.data.configuration import ScenarioSimMarketParameters, YieldCurveSimParameters
@@ -104,16 +104,35 @@ def test_absolute_mode_denser_grid_reduces_reconciliation_error(cfg, snap, portf
 
 
 @pytest.fixture
-def results(cfg, portfolio, grid, smkt):
-    gen = SensitivityScenarioGenerator(grid, cfg.sensitivity)
-    return ValuationEngine(portfolio, smkt, cfg).run(gen.generate())
+def analysis(cfg, snap, portfolio):
+    sa = SensitivityAnalysis(portfolio, snap, cfg)
+    sa.generate_sensitivities()
+    return sa
 
 
-def test_runner_shapes_and_reset(results, grid, smkt):
+@pytest.fixture
+def results(analysis):
+    return analysis.sensi_cube().cube
+
+
+def test_valuation_engine_shapes_and_reset(results, grid, analysis):
+    sim = analysis.sim_market
     assert len(results.npv) == len(grid.keys("UST")) + 1
     assert list(results.npv.columns) == ["UST_2Y", "UST_5Y", "UST_10Y", "UST_30Y"]
-    assert all(q.value() == smkt.base_values[k] for k, q in smkt.sim_data.items())
-    assert results.reconciliation is not None
+    assert all(q.value() == sim.base_values[k] for k, q in sim.sim_data.items())
+    assert sim.date == sim.asof and sim.scenario is None
+
+
+def test_valuation_engine_over_dates(cfg, snap, portfolio, grid, smkt):
+    """날짜가 여럿이면 (시나리오, 날짜)마다 평가한다. 생성기는 표본마다 다음 시나리오를 준다."""
+    smkt.scenario_generator = SensitivityScenarioGenerator(grid, cfg.sensitivity, curves=["UST"])
+    with smkt.active():
+        portfolio.build(EngineFactory.from_config(cfg, smkt))
+    dates = [smkt.asof, date(2026, 10, 26)]
+    cube = ValuationEngine(smkt.asof, dates, smkt).build_cube(portfolio)
+    assert len(cube.npv) == smkt.scenario_generator.samples() * 2
+    first_label, first_date = cube.npv.index[0]
+    assert first_date == smkt.asof and first_label == ("key_rate", "UST", "1M")
 
 
 def test_key_rate_sum_equals_parallel(results):
@@ -143,15 +162,15 @@ def test_parallel_dv01_matches_direct_quantlib(cfg, snap, portfolio, results):
                 GRID_DAY_COUNTER,
             )
         )
-        portfolio.build(EngineFactory(snap, cfg))
+        portfolio.build(EngineFactory.from_config(cfg, snap))
         for t in portfolio:
             t.instrument.instrument.setPricingEngine(ql.DiscountingBondEngine(shifted))
         base = portfolio.npvs()
         spread.setValue(BP)
         direct = portfolio.npvs() - base
     par = results.pnl.loc[[("parallel", "UST")]].iloc[0]
-    # 차이는 격자 보간 오차(기준 대사 오차)와 같은 크기
-    assert ((par - direct) / direct).abs().max() < 1e-3
+    # spreaded 격자: 평행 이동이 초기 커브 위 제로 스프레드와 같은 구조라 거의 일치
+    assert ((par - direct) / direct).abs().max() < 1e-10
 
 
 def test_spreaded_mode_reconciles_exactly(cfg, snap, portfolio, smkt):
@@ -168,7 +187,7 @@ def test_update_moves_date_forward_forward(cfg, snap, portfolio, smkt):
     """
     nxt = date(2026, 10, 26)
     with smkt.active():
-        portfolio.build(EngineFactory(smkt, cfg))
+        portfolio.build(EngineFactory.from_config(cfg, smkt))
         base = portfolio.npvs()
     smkt.update(nxt)
     with smkt.active():
@@ -183,7 +202,7 @@ def test_update_moves_date_forward_forward(cfg, snap, portfolio, smkt):
         implied = ql.YieldTermStructureHandle(
             ql.ImpliedTermStructure(snap.yield_curve("UST"), ql.Date(26, 10, 2026))
         )
-        portfolio.build(EngineFactory(snap, cfg))
+        portfolio.build(EngineFactory.from_config(cfg, snap))
         for t in portfolio:
             t.instrument.instrument.setPricingEngine(ql.DiscountingBondEngine(implied))
         direct = portfolio.npvs()
