@@ -1,120 +1,124 @@
-"""시세 읽기와 보관.
+"""시세 창구. ORE 대응: OREData/ored/marketdata/loader.hpp, csvloader.hpp, inmemoryloader.hpp.
 
-ORE 대응: OREData/ored/marketdata/loader.hpp, marketdatum.hpp, csvloader.hpp, inmemoryloader.hpp.
+Loader는 출처를 감춘다. 파일이든 DB든 ``load_quotes(asof)``, ``get(이름, asof)`` 하나로 같다.
+시세 파일 형식은 ORE market.txt와 같다: 한 줄에 ``날짜 키 값`` (공백·쉼표·탭 구분, ``#`` 주석).
 """
 
 from __future__ import annotations
 
-import csv
+import fnmatch
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
-import QuantLib as ql
-
-from quanttool.data.utilities.ids import QuoteId
+from .marketdatum import Fixing, MarketDatum, parse_market_datum
 
 
-@dataclass(frozen=True)
-class MarketDatum:
-    asof: date
-    id: str
-    value: float
+class Wildcard:
+    """``IR_SWAP/RATE/EUR/2D/6M/*`` 같은 패턴. ORE ``Wildcard``."""
 
-    def __post_init__(self) -> None:
-        QuoteId.parse(self.id)  # id 규칙 검증
+    def __init__(self, pattern: str) -> None:
+        self.pattern = pattern
+
+    def matches(self, name: str) -> bool:
+        return fnmatch.fnmatchcase(name, self.pattern)
 
 
 class Loader(ABC):
     @abstractmethod
-    def load(self, asof: date) -> list[MarketDatum]: ...
+    def load_quotes(self, d: date) -> list[MarketDatum]: ...
+
+    @abstractmethod
+    def asof_dates(self) -> list[date]: ...
+
+    def load_fixings(self) -> list[Fixing]:
+        return []
+
+    def get(self, name: str, d: date) -> MarketDatum:
+        for q in self.load_quotes(d):
+            if q.name == name:
+                return q
+        raise KeyError(f"시세 {name!r}가 {d}에 없다")
+
+    def get_wildcard(self, wildcard: Wildcard | str, d: date) -> list[MarketDatum]:
+        w = wildcard if isinstance(wildcard, Wildcard) else Wildcard(wildcard)
+        return [q for q in self.load_quotes(d) if w.matches(q.name)]
+
+    def has(self, name: str, d: date) -> bool:
+        return any(q.name == name for q in self.load_quotes(d))
+
+    def has_quotes(self, d: date) -> bool:
+        return bool(self.load_quotes(d))
 
 
 class InMemoryLoader(Loader):
-    def __init__(self, quotes: Iterable[MarketDatum]) -> None:
-        self._quotes = list(quotes)
+    """ORE ``InMemoryLoader``: ``add(날짜, 키, 값)``으로 채운다."""
 
-    def load(self, asof: date) -> list[MarketDatum]:
-        return [q for q in self._quotes if q.asof == asof]
+    def __init__(self) -> None:
+        self._quotes: dict[date, dict[str, MarketDatum]] = {}
+        self._fixings: list[Fixing] = []
 
+    def add(self, d: date, name: str, value: float) -> None:
+        day = self._quotes.setdefault(d, {})
+        if name in day:
+            raise ValueError(f"시세 중복: {d} {name}")
+        day[name] = parse_market_datum(d, name, value)
 
-# 미 재무부 Daily Treasury Par Yield Curve CSV 열 이름 → 만기 라벨
-UST_CSV_COLUMNS = {
-    "1 Mo": "1M",
-    "1.5 Month": "6W",
-    "2 Mo": "2M",
-    "3 Mo": "3M",
-    "4 Mo": "4M",
-    "6 Mo": "6M",
-    "1 Yr": "1Y",
-    "2 Yr": "2Y",
-    "3 Yr": "3Y",
-    "5 Yr": "5Y",
-    "7 Yr": "7Y",
-    "10 Yr": "10Y",
-    "20 Yr": "20Y",
-    "30 Yr": "30Y",
-}
+    def add_fixing(self, d: date, name: str, value: float) -> None:
+        self._fixings.append(Fixing(d, name, value))
 
+    def load_quotes(self, d: date) -> list[MarketDatum]:
+        return list(self._quotes.get(d, {}).values())
 
-class UstParCsvLoader(Loader):
-    """재무부 par yield CSV(퍼센트, MM/DD/YYYY)를 ``UST/PAR/{tenor}`` 소수 시세로 읽는다."""
-
-    def __init__(self, paths: str | Path | Iterable[str | Path]) -> None:
-        if isinstance(paths, str | Path):
-            paths = [paths]
-        self._paths = [Path(p) for p in paths]
-
-    def dates(self) -> list[date]:
-        """파일에 있는 날짜 (오름차순)."""
-        out: set[date] = set()
-        for path in self._paths:
-            with path.open(newline="", encoding="utf-8-sig") as f:
-                out.update(
-                    datetime.strptime(r["Date"], "%m/%d/%Y").date() for r in csv.DictReader(f)
-                )
-        return sorted(out)
-
-    def load(self, asof: date) -> list[MarketDatum]:
-        out: list[MarketDatum] = []
-        for path in self._paths:
-            with path.open(newline="", encoding="utf-8-sig") as f:
-                for row in csv.DictReader(f):
-                    if datetime.strptime(row["Date"], "%m/%d/%Y").date() != asof:
-                        continue
-                    for col, tenor in UST_CSV_COLUMNS.items():
-                        value = (row.get(col) or "").strip()
-                        if value:
-                            out.append(MarketDatum(asof, f"UST/PAR/{tenor}", float(value) / 100))
-        return out
-
-
-class QuoteStore:
-    """시세 id → SimpleQuote. 시장의 모든 구조물은 여기 Quote에 연결된다."""
-
-    def __init__(self, quotes: Iterable[MarketDatum]) -> None:
-        self._quotes: dict[str, ql.SimpleQuote] = {}
-        for q in quotes:
-            if q.id in self._quotes:
-                raise ValueError(f"시세 id 중복: {q.id}")
-            self._quotes[q.id] = ql.SimpleQuote(q.value)
-
-    def __getitem__(self, quote_id: str) -> ql.SimpleQuote:
+    def get(self, name: str, d: date) -> MarketDatum:
         try:
-            return self._quotes[quote_id]
+            return self._quotes[d][name]
         except KeyError:
-            raise KeyError(f"시세 {quote_id!r}가 없다") from None
+            raise KeyError(f"시세 {name!r}가 {d}에 없다") from None
 
-    def __contains__(self, quote_id: str) -> bool:
-        return quote_id in self._quotes
+    def asof_dates(self) -> list[date]:
+        return sorted(self._quotes)
 
-    def handle(self, quote_id: str) -> ql.QuoteHandle:
-        return ql.QuoteHandle(self[quote_id])
+    def load_fixings(self) -> list[Fixing]:
+        return list(self._fixings)
 
-    def ids(self) -> list[str]:
-        return list(self._quotes)
 
-    def values(self) -> dict[str, float]:
-        return {k: q.value() for k, q in self._quotes.items()}
+_SPLIT = re.compile(r"[,;\t ]+")
+
+
+def _read_lines(paths: Iterable[Path]) -> Iterable[tuple[date, str, float]]:
+    for path in paths:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            tokens = _SPLIT.split(line)
+            if len(tokens) != 3:
+                raise ValueError(f"{path}: '날짜 키 값' 형식이 아니다: {line!r}")
+            d = date.fromisoformat(tokens[0].replace("/", "-")) if "-" in tokens[0] else None
+            if d is None:  # ORE는 20160205 형식도 허용
+                d = date(int(tokens[0][:4]), int(tokens[0][4:6]), int(tokens[0][6:8]))
+            yield d, tokens[1], float(tokens[2])
+
+
+class CSVLoader(InMemoryLoader):
+    """ORE ``CSVLoader``: 시세·fixing 파일을 읽는다."""
+
+    def __init__(
+        self,
+        market_files: str | Path | Iterable[str | Path],
+        fixing_files: str | Path | Iterable[str | Path] = (),
+    ) -> None:
+        super().__init__()
+        for d, name, value in _read_lines(_paths(market_files)):
+            self.add(d, name, value)
+        for d, name, value in _read_lines(_paths(fixing_files)):
+            self.add_fixing(d, name, value)
+
+
+def _paths(p: str | Path | Iterable[str | Path]) -> list[Path]:
+    if isinstance(p, str | Path):
+        return [Path(p)]
+    return [Path(x) for x in p]

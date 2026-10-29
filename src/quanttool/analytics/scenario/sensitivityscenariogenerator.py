@@ -7,9 +7,10 @@ from collections.abc import Iterable, Iterator
 from datetime import date
 
 from quanttool.data.configuration import ScenarioSimMarketParameters, SensitivityScenarioData
-from quanttool.data.utilities.ids import bp_to_decimal
 
 from .scenario import Scenario
+
+BP = 1e-4
 
 
 class ScenarioGenerator(ABC):
@@ -59,8 +60,8 @@ class SensitivityScenarioGenerator(ScenarioGenerator):
         self.curves = curves or params.names()
 
     def generate(self) -> Iterator[Scenario]:
-        kr = bp_to_decimal(self.data.key_rate_bp)
-        par = bp_to_decimal(self.data.parallel_bp)
+        kr = (self.data.key_rate_bp) * BP
+        par = (self.data.parallel_bp) * BP
         for name in self.curves:
             keys = self.params.keys(name)
             for k in keys:

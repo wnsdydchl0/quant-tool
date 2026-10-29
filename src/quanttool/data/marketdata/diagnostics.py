@@ -13,7 +13,7 @@ def helper_repricing(snap: TodaysMarket, curve_name: str) -> pd.DataFrame:
     with snap.active():
         snap.yield_curve(curve_name).discount(1.0)  # 부트스트랩 강제
         for h in snap.curve_helpers(curve_name):
-            market = snap.quotes[h.quote_id].value()
+            market = h.quote.value()
             implied = h.to_quote(h.helper.impliedQuote())
             rows.append(
                 {

@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 import QuantLib as ql
 
-from quanttool.data.marketdata import InMemoryLoader, MarketDatum, TodaysMarket
+from quanttool.data.marketdata import InMemoryLoader, TodaysMarket, parse_market_datum
 from quanttool.data.marketdata.diagnostics import helper_repricing
 from quanttool.data.utilities import parsers
 from quanttool.qle.termstructures import bill_price, bill_yield
@@ -31,7 +31,7 @@ def test_par_bond_priced_at_par(cfg, snap):
         q
         for seg in cfg.curve_configs["UST"].segments
         if seg.type == "FixedRateBond"
-        for q in seg.quote_ids()
+        for q in seg.quotes
     }
     checked = [h for h in snap.curve_helpers("UST") if h.quote_id in bond_ids]
     assert len(checked) == 7
@@ -54,8 +54,9 @@ def _direct_quantlib_curve(cfg, quotes: dict[str, float]):
     settle = cal.advance(today, conv.settlement_days, ql.Days)
     helpers = []
     for seg in cfg.curve_configs["UST"].segments:
-        for qid, tenor in zip(seg.quote_ids(), seg.tenors, strict=True):
+        for qid in seg.quotes:
             y = quotes[qid]
+            tenor = parse_market_datum(ASOF, qid, y).tenor
             mat = settle + ql.Period(tenor)
             if seg.type == "ZeroCouponBill":
                 mat = cal.adjust(mat, ql.Following)
@@ -91,24 +92,25 @@ def _direct_quantlib_curve(cfg, quotes: dict[str, float]):
 
 def test_matches_direct_quantlib(cfg, snap, loader):
     with snap.active():
-        direct = _direct_quantlib_curve(cfg, {q.id: q.value for q in loader.load(ASOF)})
+        direct = _direct_quantlib_curve(cfg, {q.name: q.value for q in loader.load_quotes(ASOF)})
         ours = snap.yield_curve("UST")
         for years in [0.1, 0.5, 1, 2, 3, 5, 7, 10, 15, 20, 30]:
             d = direct.referenceDate() + ql.Period(int(years * 12), ql.Months)
             assert ours.discount(d) == pytest.approx(direct.discount(d), abs=1e-12)
 
 
-def test_quote_change_propagates(linked_snap):
+def test_quote_change_propagates(linked_snap, loader):
+    """preserve_quote_linkage=True면 loader의 시세 Quote 변경이 커브로 전파된다 (ORE와 같음)."""
     snap = linked_snap
     with snap.active():
         curve = snap.yield_curve("UST")
         before = curve.zeroRate(10.0, ql.Continuous).rate()
-        snap.quotes["UST/PAR/10Y"].setValue(0.0398 + 0.0010)
+        loader.get("BOND/YIELD/USD/UST/PAR/10Y", ASOF).quote.setValue(0.0398 + 0.0010)
         after = curve.zeroRate(10.0, ql.Continuous).rate()
     assert after - before == pytest.approx(0.0010, abs=0.0003)
     # 쿠폰은 고정이고 가격으로 전달되므로, 바뀐 시세도 정확히 재현해야 한다
     table = helper_repricing(snap, "UST").set_index("quote_id")
-    assert table.loc["UST/PAR/10Y", "market"] == pytest.approx(0.0408)
+    assert table.loc["BOND/YIELD/USD/UST/PAR/10Y", "market"] == pytest.approx(0.0408)
     assert table["error_bp"].abs().max() < 0.01
 
 
@@ -119,7 +121,9 @@ def test_todays_market_is_frozen_at_asof(cfg, loader, snap):
     assert curve.referenceDate() == ql.Date(23, 10, 2026)
     before = curve.discount(d)
     TodaysMarket.from_config(date(2026, 10, 22), cfg, loader)  # 다른 날짜 시장 구축
-    snap.quotes["UST/PAR/10Y"].setValue(0.05)
+    loader.get("BOND/YIELD/USD/UST/PAR/10Y", ASOF).quote.setValue(
+        0.05
+    )  # 같은 loader의 시세를 바꿔도
     settings = ql.Settings.instance()
     previous = settings.evaluationDate
     settings.evaluationDate = ql.Date(1, 1, 2027)
@@ -139,8 +143,9 @@ def test_active_restores_evaluation_date(snap):
 
 
 def test_missing_quote_raises(cfg):
-    loader = InMemoryLoader([MarketDatum(ASOF, "UST/PAR/2Y", 0.035)])
-    with pytest.raises(KeyError, match="UST/PAR/1M"):
+    loader = InMemoryLoader()
+    loader.add(ASOF, "BOND/YIELD/USD/UST/PAR/2Y", 0.035)
+    with pytest.raises(KeyError, match="BOND/YIELD/USD/UST/PAR/1M"):
         TodaysMarket.from_config(ASOF, cfg, loader)
 
 

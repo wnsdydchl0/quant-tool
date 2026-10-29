@@ -24,8 +24,9 @@ def test_load_repo_configs():
     assert cfg.todaysmarket.mapping(MarketObject.YieldCurve) == {"UST": "Yield/USD/UST"}
     assert cfg.todaysmarket.mapping(MarketObject.DiscountCurve) == {"USD": "Yield/USD/UST"}
     assert cfg.todaysmarket.curve_specs() == ["Yield/USD/UST"]
-    assert ust.quote_ids()[0] == "UST/PAR/1M"
-    assert ust.quote_ids()[-1] == "UST/PAR/30Y"
+    assert ust.quotes()[0] == "BOND/YIELD/USD/UST/PAR/1M"
+    assert ust.quotes()[-1] == "BOND/YIELD/USD/UST/PAR/30Y"
+    assert ust.interpolation_method == "LogCubic"
     assert cfg.conventions["UST"].settlement_days == 1
     assert cfg.engine_data["Bond"].engine == "DiscountingBondEngine"
     assert cfg.simmarket.root["UST"].tenors[0] == "1M"

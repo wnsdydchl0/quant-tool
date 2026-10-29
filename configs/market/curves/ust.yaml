@@ -1,13 +1,29 @@
-# 미 재무부 Daily Par Yield Curve로 만드는 국채 할인 커브
-name: UST
-type: YieldCurve
+# 미 재무부 Daily Par Yield Curve로 만드는 국채 할인 커브 (ORE curveconfig.xml의 YieldCurve 항목 대응)
+curve_id: UST
+curve_description: US Treasury par yield curve
 currency: USD
-conventions: UST
 segments:
   # 1M~1Y: bill, bond-equivalent yield → 할인채 가격
-  - {type: ZeroCouponBill, quote_family: UST, quote_field: PAR,
-     tenors: [1M, 2M, 3M, 4M, 6M, 1Y]}
+  - type: ZeroCouponBill
+    conventions: UST
+    quotes:
+      - BOND/YIELD/USD/UST/PAR/1M
+      - BOND/YIELD/USD/UST/PAR/2M
+      - BOND/YIELD/USD/UST/PAR/3M
+      - BOND/YIELD/USD/UST/PAR/4M
+      - BOND/YIELD/USD/UST/PAR/6M
+      - BOND/YIELD/USD/UST/PAR/1Y
   # 2Y~30Y: par yield = 쿠폰, 가격 100인 가상 채권
-  - {type: FixedRateBond, quote_family: UST, quote_field: PAR,
-     tenors: [2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y]}
-interpolation: LogCubic(Discount)
+  - type: FixedRateBond
+    conventions: UST
+    quotes:
+      - BOND/YIELD/USD/UST/PAR/2Y
+      - BOND/YIELD/USD/UST/PAR/3Y
+      - BOND/YIELD/USD/UST/PAR/5Y
+      - BOND/YIELD/USD/UST/PAR/7Y
+      - BOND/YIELD/USD/UST/PAR/10Y
+      - BOND/YIELD/USD/UST/PAR/20Y
+      - BOND/YIELD/USD/UST/PAR/30Y
+interpolation_variable: Discount
+interpolation_method: LogCubic
+yield_curve_day_counter: A365F

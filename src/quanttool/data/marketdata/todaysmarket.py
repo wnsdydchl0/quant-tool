@@ -21,7 +21,7 @@ from quanttool.data.configuration import MarketObject, parse_curve_spec
 from quanttool.data.utilities.registry import BUILDERS
 
 from .dependencygraph import DependencyGraph
-from .loader import Loader, QuoteStore
+from .loader import Loader
 from .market import BuiltCurve, HelperInfo, MarketImpl, YieldCurveType, evaluation_date
 
 if TYPE_CHECKING:
@@ -42,7 +42,8 @@ class TodaysMarket(MarketImpl):
         curve_configs: Mapping[str, YieldCurveConfig],
         preserve_quote_linkage: bool = False,
     ) -> None:
-        super().__init__(asof, QuoteStore(loader.load(asof)))
+        super().__init__(asof)
+        self.loader = loader
         self.params = params
         self.preserve_quote_linkage = preserve_quote_linkage
         self._required_yield_curves: dict[str, BuiltCurve] = {}  # 레시피 id → 구축 결과
@@ -69,7 +70,7 @@ class TodaysMarket(MarketImpl):
         cid = node[1]
         if cid in self._required_yield_curves:
             return
-        built = builder.build(recipe, self.quotes, self)
+        built = builder.build(recipe, self.loader, self)
         built.curve.discount(1.0)  # 지금(asof) 부트스트랩
         if not self.preserve_quote_linkage:
             built.curve.freeze()

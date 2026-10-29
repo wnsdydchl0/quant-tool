@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import QuantLib as ql
 
+from quanttool.data.configuration import MarketObject, parse_curve_spec
 from quanttool.data.marketdata.market import Market
 from quanttool.data.utilities import parsers
 
@@ -47,7 +48,9 @@ def curve_table(
         ref = curve.referenceDate()
         settle, freq = ref, ql.Semiannual
         if cfg is not None:
-            conv = cfg.conventions[cfg.curve_configs[name].conventions]
+            spec = parse_curve_spec(cfg.todaysmarket.mapping(MarketObject.YieldCurve)[name])
+            recipe = cfg.curve_configs[spec.curve_config_id]
+            conv = cfg.conventions[recipe.segments[-1].conventions]  # 쿠폰채 구간의 관례
             settle = parsers.calendar(conv.calendar).advance(ref, conv.settlement_days, ql.Days)
             freq = parsers.frequency(conv.frequency)
         for tenor in tenors:

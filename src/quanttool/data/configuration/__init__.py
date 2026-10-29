@@ -69,8 +69,12 @@ class Config(BaseModel):
                 if isinstance(spec, YieldCurveSpec) and recipe.currency != spec.ccy:
                     raise ValueError(f"{spec_str!r}: 레시피 통화 {recipe.currency!r}와 다르다")
         for curve in self.curve_configs.values():
-            if curve.conventions not in self.conventions:
-                raise ValueError(f"{curve.name}: 관례 {curve.conventions!r}가 없다")
+            for seg in curve.segments:
+                if seg.conventions not in self.conventions:
+                    raise ValueError(f"{curve.curve_id}: 관례 {seg.conventions!r}가 없다")
+            for dep in curve.required_curve_ids():
+                if dep not in self.curve_configs:
+                    raise ValueError(f"{curve.curve_id}: 의존 레시피 {dep!r}가 없다")
         return self
 
 
@@ -84,9 +88,9 @@ def load_config(root: str | Path = "configs") -> Config:
     curves = {}
     for p in sorted((root / "market" / "curves").glob("*.yaml")):
         data = _read(p)
-        if data["name"] in curves:
-            raise ValueError(f"커브 이름 중복: {data['name']} ({p})")
-        curves[data["name"]] = data
+        if data["curve_id"] in curves:
+            raise ValueError(f"커브 id 중복: {data['curve_id']} ({p})")
+        curves[data["curve_id"]] = data
     data = {
         "todaysmarket": _read(root / "market" / "todaysmarket.yaml"),
         "conventions": _read(root / "conventions" / "rates.yaml"),

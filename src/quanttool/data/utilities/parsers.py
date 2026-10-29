@@ -23,6 +23,10 @@ _DAY_COUNTERS: dict[str, Callable[[], ql.DayCounter]] = {
     "Actual365Fixed": ql.Actual365Fixed,
     "Actual360": ql.Actual360,
     "Thirty360.BondBasis": lambda: ql.Thirty360(ql.Thirty360.BondBasis),
+    # ORE parsers.cpp 약칭
+    "A365F": ql.Actual365Fixed,
+    "A365": ql.Actual365Fixed,
+    "A360": ql.Actual360,
 }
 
 _FREQUENCIES = {
@@ -37,6 +41,11 @@ _BDCS = {
     "Following": ql.Following,
     "ModifiedFollowing": ql.ModifiedFollowing,
     "Preceding": ql.Preceding,
+    # ORE parsers.cpp 약칭
+    "U": ql.Unadjusted,
+    "F": ql.Following,
+    "MF": ql.ModifiedFollowing,
+    "P": ql.Preceding,
 }
 
 

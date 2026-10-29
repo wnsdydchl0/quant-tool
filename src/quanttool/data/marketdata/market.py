@@ -24,7 +24,7 @@ from quanttool.data.configuration import (
 )
 
 from .dependencygraph import Node
-from .loader import QuoteStore
+from .loader import Loader
 
 
 class YieldCurveType(StrEnum):
@@ -59,9 +59,6 @@ class Market(ABC):
     asof: date
 
     @abstractmethod
-    def quote(self, quote_id: str) -> ql.QuoteHandle: ...
-
-    @abstractmethod
     def discount_curve(
         self, ccy: str, configuration: str = DEFAULT_CONFIGURATION
     ) -> ql.YieldTermStructureHandle: ...
@@ -93,6 +90,7 @@ class HelperInfo:
     """부트스트랩 헬퍼 하나와 진단용 정보."""
 
     quote_id: str
+    quote: ql.Quote  # 시장 시세 (MarketDatum.quote)
     helper: ql.RateHelper
     maturity: ql.Date
     to_quote: Callable[[float], float]  # 헬퍼 시세(가격) → 시장 시세 단위(수익률)
@@ -110,16 +108,10 @@ class MarketImpl(Market):
     TodaysMarket(구축)과 SimMarket(변경)이 같은 보관소를 쓰고, 채우는 방식만 다르다.
     """
 
-    def __init__(self, asof: date, quotes: QuoteStore | None = None) -> None:
+    def __init__(self, asof: date) -> None:
         self.asof = asof
-        self.quotes = quotes
         # (configuration, 용도, 이름) → Handle. ORE marketimpl.hpp ``yieldCurves_``
         self._yield_curves: dict[tuple[str, YieldCurveType, str], ql.YieldTermStructureHandle] = {}
-
-    def quote(self, quote_id: str) -> ql.QuoteHandle:
-        if self.quotes is None:
-            raise KeyError(f"{type(self).__name__}: 시세 {quote_id!r}를 보관하지 않는다")
-        return self.quotes.handle(quote_id)
 
     def discount_curve(
         self, ccy: str, configuration: str = DEFAULT_CONFIGURATION
@@ -176,4 +168,5 @@ class MarketBuilder(ABC):
         return []
 
     @abstractmethod
-    def build(self, recipe: Any, quotes: QuoteStore, market: Market) -> BuiltCurve: ...
+    def build(self, recipe: Any, loader: Loader, market: Market) -> BuiltCurve:
+        """ORE YieldCurve(asof, spec, curveConfigs, loader, …)와 같이 시세는 loader에서 꺼낸다."""

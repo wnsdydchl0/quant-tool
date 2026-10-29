@@ -56,12 +56,13 @@ def test_engine_data_mismatch_rejected(cfg, snap):
         EngineFactory(bad, snap).builder("Bond")
 
 
-def test_npv_reacts_to_quote(cfg, linked_snap, portfolio):
+def test_npv_reacts_to_quote(cfg, linked_snap, loader, portfolio):
     snap = linked_snap
     with snap.active():
         portfolio.build(EngineFactory.from_config(cfg, snap))
         before = portfolio.trades["UST_10Y"].npv()
-        snap.quotes["UST/PAR/10Y"].setValue(snap.quotes["UST/PAR/10Y"].value() + 0.0001)
+        q = loader.get("BOND/YIELD/USD/UST/PAR/10Y", snap.asof).quote
+        q.setValue(q.value() + 0.0001)
         after = portfolio.trades["UST_10Y"].npv()
     # 10Y 1bp 상승 → 롱 포지션 손실, 크기는 대략 액면 × 듀레이션 × 1bp
     assert -1.0e7 * 9 * 1e-4 < after - before < -1.0e7 * 6 * 1e-4

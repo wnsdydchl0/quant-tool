@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from quanttool.data.configuration import load_config
-from quanttool.data.marketdata import TodaysMarket, UstParCsvLoader
+from quanttool.data.marketdata import CSVLoader, TodaysMarket
 
 ROOT = Path(__file__).resolve().parents[1]
 ASOF = date(2026, 10, 23)
@@ -17,7 +17,7 @@ def cfg():
 
 @pytest.fixture
 def loader():
-    return UstParCsvLoader(ROOT / "tests" / "fixtures" / "ust_par_sample.csv")
+    return CSVLoader(ROOT / "tests" / "fixtures" / "market_ust_sample.txt")
 
 
 @pytest.fixture
