@@ -2,7 +2,7 @@
 
 ORE 대응: OREData/ored/marketdata/market.hpp, marketimpl.hpp.
 
-가격결정·시나리오 코드는 Market 규격 메소드만 쓴다 (docs/architecture.md 1.7 불변 조건).
+가격결정·시나리오 코드는 Market 규격 메소드만 쓴다 (docs/architecture.md 1.6 불변 조건).
 """
 
 from __future__ import annotations

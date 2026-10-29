@@ -1,7 +1,7 @@
 """시나리오 × 날짜 반복 평가. ORE 대응: OREAnalytics/orea/engine/valuationengine.hpp (buildCube).
 
 포트폴리오는 시뮬레이션 시장에 한 번 조립된 상태로 받고, 표본(시나리오)마다·날짜마다
-sim_market.update(d) → NPV를 기록한다. 끝나면 시장을 reset한다 (docs/architecture.md 1.7 불변 조건).
+sim_market.update(d) → NPV를 기록한다. 끝나면 시장을 reset한다 (docs/architecture.md 1.6 불변 조건).
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""의존 방향 검사 (docs/architecture.md 1.5 원칙 8).
+"""의존 방향 검사 (docs/architecture.md 1.4 원칙 8).
 
 qle·data.utilities·data.configuration → data.marketdata → data.portfolio
 → analytics.scenario → analytics.engine → analytics.app.
