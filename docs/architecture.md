@@ -4,7 +4,7 @@
 - **0장 레퍼런스**: QuantLib과 ORE의 구조, ORE를 실제로 쓰는 모습.
 - **1장 패키지의 구조**: QuantTool이 무엇이고 어떤 층으로 되어 있는지, 폴더·클래스 설계, 실제 사용 흐름.
 - **2장 진행**: 결정 사항, 현황, 다음 단계.
-- 데이터 수집·저장은 별도 프로젝트로 분리한다: `docs/data_platform.md`.
+- 데이터 수집·저장은 별도 프로젝트로 분리한다: `market-data` 레포 `docs/design.md`.
 
 > **상태(2026-10-29)**: 1장의 구조와 클래스 이름(ORE 구조)대로 코드를 재구성했다. ✓ 표시는 구현된 것, 나머지는 예정이다.
 > 재구성 전 이름과의 대응은 1.8 표를 본다.
@@ -304,7 +304,7 @@ QuantLib의 부품을 쓰고, ORE의 구조(QuantExt / OREData / OREAnalytics)�
   노트북에서 객체를 직접 다루는 파이썬 API가 1차 사용 방식이다(ORE처럼 앱 하나가 아니라 객체를 바로 조립).
 
 ```
-시장 데이터 DB (docs/data_platform.md) ──► [data: 객체화] TodaysMarket (커브·지수·변동성, 이름으로 조회)   ┐
+시장 데이터 DB (market-data 레포 docs/design.md) ──► [data: 객체화] TodaysMarket (커브·지수·변동성, 이름으로 조회)   ┐
 포지션 YAML ───────────────────────────► [data: 객체화] Portfolio (Trade → QuantLib 상품 + 엔진)        ┘
                                                   │
                                                   ├─► 1) 가격평가      시장 × 계약 → NPV, 현금흐름              (data만으로)
@@ -351,7 +351,7 @@ QuantLib의 부품을 쓰고, ORE의 구조(QuantExt / OREData / OREAnalytics)�
 
 | 하고 싶은 것 | 하는 곳 |
 |---|---|
-| 시세·요인의 추이 보기 | 데이터 DB에 SQL (`docs/data_platform.md`). 툴 객체가 필요 없다 |
+| 시세·요인의 추이 보기 | 데이터 DB에 SQL (`market-data` 레포 `docs/design.md`). 툴 객체가 필요 없다 |
 | PCA·SSR 같은 통계 추정 | `research/`. 검증된 값만 `configs/estimated/`에 출처와 함께 |
 | 과거 어느 날의 시장을 재현 (그날의 커브·가격·그릭스, 백테스트) | 그 날짜로 `TodaysMarket(d)`, 결과는 표로 |
 | 과거에 일어난 변화를 오늘 시장에 적용 (historical VaR) | 오늘 시장 + 과거 요인 변화 시나리오 → `ScenarioSimMarket` |
@@ -451,7 +451,7 @@ quant-tool/
 ├── research/                              PCA·SSR 추정 → 검증 후 configs/estimated/
 ├── tests/ ✓                               src와 같은 구조. QuantLib 직접 계산·해석해와 비교 (ORE ExpectedOutput 역할)
 ├── scripts/fetch_references.sh ✓          references/ 클론
-├── docs/                                  architecture.md, data_platform.md
+├── docs/                                  architecture.md
 └── references/                            (gitignore) QuantLib-SWIG, ORE Engine, ORE-SWIG 원본
 ```
 
@@ -766,7 +766,7 @@ Autocallable:  {model: LocalVol,     engine: MonteCarlo, params: {paths: 100000}
 | 항목 | 내용 | 현재 방향 |
 |---|---|---|
 | 구조·이름 | 자체 이름 vs ORE 이름 | **ORE 구조·이름을 따른다** (1.6, 1.7, 구현됨) |
-| 데이터 | 이 레포 `pipeline/` vs 별도 프로젝트 | **별도 프로젝트 `market-data` + DuckDB** (`docs/data_platform.md`) |
+| 데이터 | 이 레포 `pipeline/` vs 별도 프로젝트 | **별도 프로젝트 `market-data` + DuckDB** (`market-data` 레포 `docs/design.md`) |
 | 범위 | 신용 포함 여부 | **신용(CDS, 해저드율, XVA, 담보) 제외** |
 | 시나리오 시장 방식 | 원래 시세 bump vs ORE식 격자 재표현 | **격자 재표현** (PCA·과거 재현과 좌표 일치, 속도, vol 지역성) |
 | 격자 커브 모드 | 절대 vs spreaded(ORE `SpreadedDiscountCurve`) | **spreaded 기본**(구현됨). 기준 대사 오차 ≈1e-16(절대 모드는 합성 샘플 기준 최대 5.1e-4, 30Y). 절대는 `spreaded=False` |
@@ -820,7 +820,7 @@ python -m pytest -q && ruff check . && ruff format --check .
 | `TodaysMarket`은 다른 날짜 시장·평가일 변경과 무관 | 기준일·할인계수 불변 (테스트) |
 
 ### 2.3 다음 단계
-1. **데이터 플랫폼** (`docs/data_platform.md` 9장): `market-data` 레포, DuckDB 스키마, FRED 수집기 → QuantTool `DuckDBLoader`.
+1. **데이터 플랫폼** (`market-data` 레포 `docs/design.md` 9장): `market-data` 레포, DuckDB 스키마, FRED 수집기 → QuantTool `DuckDBLoader`.
 2. `ParSensitivityAnalysis`: 격자 민감도 → 국채·스왑 par 민감도(헷지 수량).
 3. KRW 국채·IRS, USD SOFR 커브와 `Swap`·`LegBuilder`, `Market.discount_curve`·`index`.
 4. `factorhistory`: 날짜별 격자값 → `risk_factors` 표. 옵션 체인 일별 적재 시작.
