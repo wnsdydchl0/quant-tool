@@ -1,2 +1,2 @@
-# trade_type → 평가 방법 (ORE pricingengine.xml 대응)
-FixedBond: {model: Discounting, engine: DiscountingBond}
+# trade_type → 평가 방법 (ORE pricingengine.xml / EngineData 대응)
+Bond: {model: DiscountedCashflows, engine: DiscountingBondEngine}

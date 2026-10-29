@@ -1,9 +1,9 @@
 # 예시 포지션 (액면 USD). 쿠폰·만기는 예시 값이다.
-- {id: UST_2Y, type: FixedBond, notional: 2.0e7, coupon: 0.035,
+- {id: UST_2Y, trade_type: Bond, notional: 2.0e7, coupon: 0.035,
    issue_date: 2026-09-30, maturity_date: 2028-09-30, conventions: UST, discount: UST}
-- {id: UST_5Y, type: FixedBond, notional: 1.0e7, coupon: 0.03625,
+- {id: UST_5Y, trade_type: Bond, notional: 1.0e7, coupon: 0.03625,
    issue_date: 2026-09-30, maturity_date: 2031-09-30, conventions: UST, discount: UST}
-- {id: UST_10Y, type: FixedBond, notional: 1.0e7, coupon: 0.04125,
+- {id: UST_10Y, trade_type: Bond, notional: 1.0e7, coupon: 0.04125,
    issue_date: 2026-08-15, maturity_date: 2036-08-15, conventions: UST, discount: UST}
-- {id: UST_30Y, type: FixedBond, notional: -5.0e6, coupon: 0.0475,
+- {id: UST_30Y, trade_type: Bond, notional: -5.0e6, coupon: 0.0475,
    issue_date: 2026-08-15, maturity_date: 2056-08-15, conventions: UST, discount: UST}

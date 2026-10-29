@@ -1,6 +1,6 @@
 """미 재무부 Daily Treasury Par Yield Curve CSV를 연도별로 받아 data/ust_par/{year}.csv에 저장한다.
 
-툴 밖의 수집 단계다. 툴은 저장된 파일을 quanttool.market.UstParCsvLoader로 읽는다.
+툴 밖의 수집 단계다. 툴은 저장된 파일을 quanttool.data.marketdata.UstParCsvLoader로 읽는다.
 
     python pipeline/ust_par.py 2025 2026
 """
