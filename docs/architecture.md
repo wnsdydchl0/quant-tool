@@ -1,17 +1,6 @@
 # QuantTool 아키텍처
 
-이 문서 하나가 설계의 기준이다.
-- **0장 레퍼런스**: QuantLib과 ORE의 구조, ORE를 실제로 쓰는 모습.
-- **1장 패키지의 구조**: QuantTool이 무엇이고 어떤 층으로 되어 있는지, 폴더·클래스 설계, 실제 사용 흐름.
-- **2장 진행**: 결정 사항, 현황, 다음 단계.
-- 데이터 수집·저장은 별도 프로젝트로 분리한다: `market-data` 레포 `docs/design.md`.
-
-> **상태(2026-10-29)**: 1장의 구조와 클래스 이름(ORE 구조)대로 코드를 재구성했다. ✓ 표시는 구현된 것, 나머지는 예정이다.
-> 재구성 전 이름과의 대응은 1.8 표를 본다.
-> 범위에서 신용(CDS, 해저드율, XVA, 담보) 기능은 제외한다.  
-  
-<- 아니 이 위파트 전부 필요해? 어차피 파일 읽으면 다 개요가 나오는데 굳이 설명이 필요해? 그리고 작업상황도 #2에 나오잖아? 필요없으면 삭제해 
-기능상 이점이 있어서 하는거야 ?
+설계 기준 문서. ORE 학습용 예시는 `docs/ore_walkthrough.md`, 데이터 수집·저장은 `market-data` 레포 `docs/design.md`.
 
 ---
 
@@ -113,9 +102,8 @@ QuantLib 층위 위에 **"조립 → 활용"** 두 단을 얹은 구조다. "Dat
   - 커브 기준일이 asof로 고정된다(`ored/marketdata/yieldcurve.cpp`가 `asofDate_`를 넘김).
   - 생성자 인자 `preserveQuoteLinkage`의 기본값이 `false`라 구축 후 시세 Quote와의 연결도 끊는다(`todaysmarket.hpp`).
   - 흔드는 일은 `SimMarket`의 몫이다.
-  
-  
--> 아니 근데 OREData에 등장하는 객체와 기능들에 대한 예시가 없어서 이해가 안되거든? 파이썬화한 코드를 보여주든 아니면 뭐하든 해서 필수적인 객체와 기능들을 전부 실제 코드(수도 파이썬 코드여도)로 예시를 보여줘. 스킴을 잡아야 하는데 안잡혀서. 흐름구조를 따라가면서 등장하는 것들도 자세하게 설명해줘.
+
+예시 코드: `docs/ore_walkthrough.md` 1장(시세 → 관례 → 커브 레시피 → TodaysMarketParameters → TodaysMarket 구축 → Market 규격).
 
 #### (3) Portfolio: 데이터 → build → 상품 + 엔진
 
@@ -145,7 +133,8 @@ class Bond(Trade):
         ql_bond.setPricingEngine(builder.engine(self.ccy, self.curve_id))  # 자기 키로 요청 → 같은 키면 캐시
 ```
 
--> 사실 ORE Data 부터 제대로 이해가 안되서 이것도 이해가 안되고, 위 코드도 설명이 불친절해 제대로 해줘. OREData의 전반적읜 스킴을잡을수있게 그냥 필수적인/핵심적인 거의 모든 요소의 활용예를 그냥 보여줘 한번 스킴을 잡게. 그다음에 이해하면 다 지울거야. 일단 이해를 위해선 필요해. 
+예시 코드: `docs/ore_walkthrough.md` 2장(Trade·LegData → EngineData → EngineBuilder → LegBuilder → EngineFactory → `Swap::build`).
+
 #### (4) OREAnalytics: SimMarket 위의 분석
 
 설계 문서(Simulation Market 절): "시장이 가정한 시나리오로 움직일 때(**고정 기준일**) 또는 **시간에 따라** 변할 때 가치가 어떻게 바뀌는지는,
@@ -177,9 +166,9 @@ SimMarket.update(d):                          # orea/simulation/simmarket.cpp
 - **ValuationEngine::buildCube**: 표본(시나리오)마다 → 날짜마다 → `populateCube`(시장 갱신, 계산기 실행) → cube에 기록 → 끝나면 `reset`.
 - **ParSensitivityAnalysis**: 제로금리 등 "raw" 민감도를 시장 상품 기준 par 민감도로 야코비안(연쇄법칙) 변환.
   raw 영역에서 계산하는 이유는 시장 점을 바꿀 때마다 재부트스트랩하지 않아 빠르기 때문이다.
-  
-  
--> 지금 여기서도 나한테 필요가 없는것. 그니까 신용이나 스트레스 테스트 등 민감도와 시나리오 분석 등에 집중하고 싶은 내가 관련이 있는 것들 보여준거지? 그렇다고 핵심적이거나 중요한데 생략하지는 마. 근데 이 anal 파트도 예시를 전부 보여줘 OREData에서 요청한 것처럼. 아래에서 너가 예시를 보여주긴 하지만 빌드없이 없으니까 이해가 안되거든? 그리고 만약 가능하다면 다이어그램으로 전체적은 OREData, OREAnal 을 통한 활용구조를 간단하게 보여줘. 
+
+예시 코드: `docs/ore_walkthrough.md` 0장(전체 다이어그램), 3장(RiskFactorKey·Scenario → 격자·스마일 동학 → ScenarioSimMarket → 민감도 설정·템플릿 → 생성기 → ValuationEngine → SensitivityCube → SensitivityAnalysis → par 변환).
+
 #### (5) ORE를 실제로 쓰는 모습
 
 예시 상황: **EUR 20년 스왑 하나의 오늘 가격과 금리 민감도.** 입력 파일은 `references/Engine/Examples/MinimalSetup/Input`, `Examples/MarketRisk/Input`.
