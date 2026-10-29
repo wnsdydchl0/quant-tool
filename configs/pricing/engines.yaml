@@ -1,0 +1,8 @@
+# 상품 유형 → 평가 방법 (ORE pricingengine.xml / EngineData 대응)
+global_parameters: {}
+products:
+  Bond:
+    model: DiscountedCashflows
+    model_parameters: {}
+    engine: DiscountingRiskyBondEngine   # 신용 커브 없이 쓰면 무위험 할인 (ORE builders/bond.hpp)
+    engine_parameters: {}

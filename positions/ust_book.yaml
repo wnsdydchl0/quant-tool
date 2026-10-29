@@ -1,0 +1,86 @@
+# 예시 포지션 (ORE portfolio.xml의 Bond 거래 대응). 쿠폰·만기는 예시 값이다.
+# 원금은 쿠폰 레그 notionals(액면, USD), 매도 포지션은 payer: true (ORE: 승수 = bond_notional × (지급이면 −1)).
+- id: UST_2Y
+  trade_type: Bond
+  bond_data:
+    issuer_id: UST
+    security_id: UST_2Y
+    reference_curve_id: UST
+    settlement_days: 1
+    calendar: UnitedStates.GovernmentBond
+    issue_date: 2026-09-30
+    coupons:
+      - leg_type: Fixed
+        payer: false
+        currency: USD
+        notionals: [2.0e+07]
+        day_counter: ActualActual.Bond
+        payment_convention: Unadjusted
+        fixed_leg_data: {rates: [0.035]}
+        schedule_data:
+          rules:
+            - {start_date: 2026-09-30, end_date: 2028-09-30, tenor: 6M, calendar: UnitedStates.GovernmentBond,
+               convention: Unadjusted, term_convention: Unadjusted, rule: Backward}
+- id: UST_5Y
+  trade_type: Bond
+  bond_data:
+    issuer_id: UST
+    security_id: UST_5Y
+    reference_curve_id: UST
+    settlement_days: 1
+    calendar: UnitedStates.GovernmentBond
+    issue_date: 2026-09-30
+    coupons:
+      - leg_type: Fixed
+        payer: false
+        currency: USD
+        notionals: [1.0e+07]
+        day_counter: ActualActual.Bond
+        payment_convention: Unadjusted
+        fixed_leg_data: {rates: [0.03625]}
+        schedule_data:
+          rules:
+            - {start_date: 2026-09-30, end_date: 2031-09-30, tenor: 6M, calendar: UnitedStates.GovernmentBond,
+               convention: Unadjusted, term_convention: Unadjusted, rule: Backward}
+- id: UST_10Y
+  trade_type: Bond
+  bond_data:
+    issuer_id: UST
+    security_id: UST_10Y
+    reference_curve_id: UST
+    settlement_days: 1
+    calendar: UnitedStates.GovernmentBond
+    issue_date: 2026-08-15
+    coupons:
+      - leg_type: Fixed
+        payer: false
+        currency: USD
+        notionals: [1.0e+07]
+        day_counter: ActualActual.Bond
+        payment_convention: Unadjusted
+        fixed_leg_data: {rates: [0.04125]}
+        schedule_data:
+          rules:
+            - {start_date: 2026-08-15, end_date: 2036-08-15, tenor: 6M, calendar: UnitedStates.GovernmentBond,
+               convention: Unadjusted, term_convention: Unadjusted, rule: Backward}
+- id: UST_30Y
+  trade_type: Bond
+  bond_data:
+    issuer_id: UST
+    security_id: UST_30Y
+    reference_curve_id: UST
+    settlement_days: 1
+    calendar: UnitedStates.GovernmentBond
+    issue_date: 2026-08-15
+    coupons:
+      - leg_type: Fixed
+        payer: true
+        currency: USD
+        notionals: [5.0e+06]
+        day_counter: ActualActual.Bond
+        payment_convention: Unadjusted
+        fixed_leg_data: {rates: [0.0475]}
+        schedule_data:
+          rules:
+            - {start_date: 2026-08-15, end_date: 2056-08-15, tenor: 6M, calendar: UnitedStates.GovernmentBond,
+               convention: Unadjusted, term_convention: Unadjusted, rule: Backward}

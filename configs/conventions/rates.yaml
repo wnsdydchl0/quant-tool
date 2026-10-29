@@ -1,0 +1,9 @@
+# 금리 상품 관례. 커브·상품 설정이 이름으로 참조한다.
+UST:
+  calendar: UnitedStates.GovernmentBond
+  day_count: ActualActual.Bond       # 쿠폰 채권 (ISMA)
+  bill_day_count: Actual365Fixed     # bill bond-equivalent yield 기준
+  settlement_days: 1
+  frequency: Semiannual
+  business_day_convention: Unadjusted  # 쿠폰 일정
+  payment_convention: Unadjusted       # 수익률 관례: 명목 쿠폰일로 할인 (주말 지급 지연 무시)

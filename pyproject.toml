@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quanttool"
+version = "0.0.1"
+description = "QuantLib 기반, ORE 구조를 참조한 가격결정·리스크 분석 툴"
+requires-python = ">=3.11"
+dependencies = [
+    "QuantLib==1.44",
+    "pydantic>=2",
+    "pyyaml>=6",
+    "pandas>=2",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+notebook = ["matplotlib>=3.8", "ipykernel>=6", "nbformat>=5", "nbclient>=0.10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["docs", "references"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# 노트북은 셀 중간 import와 설명용 긴 줄을 허용한다
+"notebooks/**" = ["E402", "E501"]
