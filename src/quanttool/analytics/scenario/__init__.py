@@ -8,6 +8,7 @@ from .shiftscenariogenerator import (
     ScenarioDescription,
     ShiftScenarioGenerator,
     apply_curve_shift,
+    zero_rate_shift_scenario,
 )
 from .simmarket import ScenarioSimMarket, SimMarket
 
@@ -26,4 +27,5 @@ __all__ = [
     "SimMarket",
     "SimpleScenario",
     "apply_curve_shift",
+    "zero_rate_shift_scenario",
 ]

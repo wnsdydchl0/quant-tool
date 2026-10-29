@@ -105,3 +105,16 @@ class ShiftScenarioGenerator(ListScenarioGenerator):
 
     def scenario_descriptions(self) -> list[ScenarioDescription]:
         return list(self.descriptions)
+
+
+def zero_rate_shift_scenario(sim_market, shifts: dict[RiskFactorKey, float], label: str = ""):
+    """격자점별 제로금리 이동(소수) → 그 시뮬레이션 시장에 적용할 DeltaScenario (QuantTool 도우미).
+
+    손으로 만든 시나리오, 스트레스, PCA 요인 시나리오처럼 "이 격자점의 제로금리를 이만큼"을
+    시장 Quote 값(할인계수 또는 비율 × exp(−Δz·t))으로 바꾼다. 생성기 내부와 같은 식이다.
+    """
+    base = sim_market.base_scenario()
+    delta = {
+        k: base.get(k) * math.exp(-dz * sim_market.sim_data_times[k]) for k, dz in shifts.items()
+    }
+    return DeltaScenario(base, delta, label)

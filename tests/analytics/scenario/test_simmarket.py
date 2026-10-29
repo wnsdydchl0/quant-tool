@@ -13,6 +13,7 @@ from quanttool.analytics.scenario import (
     RiskFactorKey,
     ScenarioSimMarket,
     SimpleScenario,
+    zero_rate_shift_scenario,
 )
 from quanttool.data.configuration import ScenarioSimMarketParameters
 from quanttool.data.marketdata.market import evaluation_date
@@ -38,12 +39,9 @@ def _zero(curve, years):
 
 def _zero_shift(sim, label, shifts: dict[int, float]) -> DeltaScenario:
     """격자점 i의 제로금리를 dz만큼: 값 × exp(−dz·t)."""
-    base = sim.base_scenario()
-    delta = {}
-    for i, dz in shifts.items():
-        k = RiskFactorKey(*UST, i)
-        delta[k] = base.get(k) * math.exp(-dz * sim.sim_data_times[k])
-    return DeltaScenario(base, delta, label)
+    return zero_rate_shift_scenario(
+        sim, {RiskFactorKey(*UST, i): dz for i, dz in shifts.items()}, label
+    )
 
 
 def _index(cfg, tenor):
