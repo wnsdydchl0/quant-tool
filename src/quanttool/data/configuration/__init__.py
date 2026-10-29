@@ -14,11 +14,8 @@ from .conventions import Conventions, InstrumentConventions, RateConventions
 from .curveconfig import YieldCurveConfig
 from .curvespec import CurveSpec, YieldCurveSpec, parse_curve_spec
 from .enginedata import EngineData, ProductEngineSpec
-from .simmarketparameters import (
-    ScenarioSimMarketParameters,
-    SensitivityScenarioData,
-    YieldCurveSimParameters,
-)
+from .scenariosimmarketparameters import ScenarioSimMarketParameters, YieldCurveSimData
+from .sensitivityscenariodata import CurveShiftData, SensitivityScenarioData, ShiftData
 from .todaysmarketparameters import (
     DEFAULT_CONFIGURATION,
     MarketConfiguration,
@@ -30,6 +27,7 @@ __all__ = [
     "DEFAULT_CONFIGURATION",
     "Config",
     "Conventions",
+    "CurveShiftData",
     "CurveSpec",
     "InstrumentConventions",
     "MarketConfiguration",
@@ -39,9 +37,10 @@ __all__ = [
     "RateConventions",
     "ScenarioSimMarketParameters",
     "SensitivityScenarioData",
+    "ShiftData",
     "TodaysMarketParameters",
     "YieldCurveConfig",
-    "YieldCurveSimParameters",
+    "YieldCurveSimData",
     "YieldCurveSpec",
     "load_config",
     "parse_curve_spec",
@@ -55,7 +54,7 @@ class Config(BaseModel):
     conventions: dict[str, RateConventions]
     curve_configs: dict[str, YieldCurveConfig]
     engine_data: EngineData = EngineData()
-    simmarket: ScenarioSimMarketParameters = ScenarioSimMarketParameters({})
+    simmarket: ScenarioSimMarketParameters | None = None
     sensitivity: SensitivityScenarioData = SensitivityScenarioData()
 
     @model_validator(mode="after")

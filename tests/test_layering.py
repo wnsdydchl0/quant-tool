@@ -1,7 +1,7 @@
 """의존 방향 검사 (docs/architecture.md 1.4 원칙 8).
 
 qle·data.utilities·data.configuration → data.marketdata → data.portfolio
-→ analytics.scenario → analytics.engine → analytics.app.
+→ analytics.scenario → analytics.cube → analytics.engine → analytics.app.
 아래 층은 위 층을 import하지 않는다.
 """
 
@@ -20,8 +20,9 @@ LAYER = {
     "data.portfolio": 2,
     "data.model": 2,
     "analytics.scenario": 3,
-    "analytics.engine": 4,
-    "analytics.app": 5,
+    "analytics.cube": 4,
+    "analytics.engine": 5,
+    "analytics.app": 6,
 }
 
 

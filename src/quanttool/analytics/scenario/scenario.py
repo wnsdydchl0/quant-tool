@@ -1,18 +1,10 @@
-"""시나리오 데이터. ORE 대응: OREAnalytics/orea/scenario/scenario.hpp.
+"""시나리오 데이터.
 
-시나리오는 격자점별 이동량이다. 생성·적용·평가는 분리한다 (원칙 7).
+ORE 대응: QuantExt/qle/termstructures/scenario.hpp, OREAnalytics/orea/scenario/deltascenario.hpp.
+
+시나리오는 격자점 → 값이다. 생성(생성기)·적용(SimMarket)·평가(ValuationEngine)를 분리한다 (원칙 7).
 """
 
-from __future__ import annotations
+from quanttool.qle.scenario import DeltaScenario, KeyType, RiskFactorKey, Scenario, SimpleScenario
 
-from dataclasses import dataclass, field
-
-from quanttool.qle.scenario import RiskFactorKey
-
-__all__ = ["RiskFactorKey", "Scenario"]
-
-
-@dataclass(frozen=True)
-class Scenario:
-    label: tuple | str
-    shifts: dict[RiskFactorKey, float] = field(default_factory=dict)  # 소수 (금리 0.0001 = 1bp)
+__all__ = ["DeltaScenario", "KeyType", "RiskFactorKey", "Scenario", "SimpleScenario"]

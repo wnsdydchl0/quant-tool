@@ -1,7 +1,7 @@
 # QuantTool
 - 설계 기준·진행 현황·다음 단계는 docs/architecture.md (0 레퍼런스, 1 패키지 구조, 2 진행). 데이터 수집·저장은 별도 레포 ../market-data (설계 docs/design.md, 제공 데이터 docs/data_catalog.md).
 - 구조와 원칙은 docs/architecture.md를 따른다. 새 모듈은 1.4 설계 원칙과 1.6 불변 조건을 지킨다.
-- 의존 방향: qle·data.utilities·data.configuration → data.marketdata → data.portfolio → analytics.scenario → analytics.engine → analytics.app. 역방향 import 금지 (tests/test_layering.py가 검사).
+- 의존 방향: qle·data.utilities·data.configuration → data.marketdata → data.portfolio → analytics.scenario → analytics.cube → analytics.engine → analytics.app. 역방향 import 금지 (tests/test_layering.py가 검사).
 - QuantLib API는 추측하지 말고 references/QuantLib-SWIG 또는 dir()/help()로 확인 후 사용.
 - ORE 설계를 참조할 때는 references/Engine 원본을 확인하고 파일 경로를 남긴다. 요약은 docs/architecture.md 0.2.
 - references/는 gitignore 대상이다. 없으면 `scripts/fetch_references.sh`로 클론한다.

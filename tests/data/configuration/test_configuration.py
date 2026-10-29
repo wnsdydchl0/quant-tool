@@ -29,8 +29,10 @@ def test_load_repo_configs():
     assert ust.interpolation_method == "LogCubic"
     assert cfg.conventions["UST"].settlement_days == 1
     assert cfg.engine_data.engine("Bond") == "DiscountingRiskyBondEngine"
-    assert cfg.simmarket.root["UST"].tenors[0] == "1M"
-    assert cfg.sensitivity.key_rate_bp == 1.0
+    assert cfg.simmarket.yield_curve_tenors("UST")[0] == "1M"
+    assert cfg.simmarket.yield_curve_names() == ["UST"]
+    assert cfg.sensitivity.yield_curves["UST"].shift_size == 1e-4
+    assert cfg.sensitivity.use_spreaded_term_structures
 
 
 def _copy(tmp_path: Path) -> Path:
