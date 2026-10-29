@@ -38,7 +38,7 @@ def bill_yield(price: float, days: int) -> float:
 #   spreaded: DF(t) = DF_ref(t) · exp(−s(t)·t),  s_i = −ln(비율_i)/t_i
 #   절대:     DF(t) = exp(−z(t)·t),              z_i = −ln(DF_i)/t_i
 # ORE의 logLinear·logCubic 모드(할인계수 비율의 로그 보간)는 QuantLib-Python에 같은 구조물이 없어
-# 지원하지 않는다 (docs/architecture.md 2.1).
+# 지원하지 않는다 (docs/architecture.md 1.4 ORE와 다른 점).
 
 _FLAT_EXTRAPOLATION_LIMIT = "100Y"
 

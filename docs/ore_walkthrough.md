@@ -172,7 +172,7 @@ loader.get(Wildcard("IR_SWAP/RATE/EUR/2D/6M/*"), asof) # 커브 설정이 이 �
 - **시세는 Quote(Handle)로 들어온다.** 커브 헬퍼가 이 Quote를 관찰하므로, 값을 바꾸면 커브가 따라온다(QuantLib Observer).
 - **Loader는 출처를 모르게 감싼다.** CSV든 DB든 메모리든 `loadQuotes(asof)` 하나로 같다.
 
-**QuantTool**: `data/marketdata/loader.py`의 `MarketDatum`, `Loader`, `InMemoryLoader`, `UstParCsvLoader`, `QuoteStore`. 키 규칙은 `data/utilities/ids.py`(`BOND/YIELD/USD/UST/PAR/10Y`)에 있다.
+**QuantTool**: `data/marketdata/marketdatum.py`(`MarketDatum`, `BondYieldQuote`, `parse_market_datum`), `loader.py`(`Loader`, `CSVLoader`, `InMemoryLoader`, `Wildcard`). 같은 이름·메소드다. par yield 시세 `BOND/YIELD/…`는 QuantTool 확장이다.
 
 ### 1.2 Conventions: 상품 관례 사전
 
@@ -206,7 +206,7 @@ InstrumentConventions.instance().setConventions(conventions)   # 전역 등록�
 
 **왜**: 같은 숫자 2%도 결제일·일수·주기가 다르면 다른 숫자다. 관례를 이름 하나로 묶어 두면 커브 설정과 계약서가 `EUR-6M-SWAP-CONVENTIONS`라는 이름만 가리키면 된다.
 
-**QuantTool**: `configs/conventions/rates.yaml` → `data/configuration/conventions.py`의 `RateConventions`. 전역 등록부 대신 `cfg.conventions`를 넘긴다(architecture.md 2.1).
+**QuantTool**: `configs/conventions/rates.yaml` → `data/configuration/conventions.py`의 `Conventions`, 전역 `InstrumentConventions`. `load_config`가 등록한다(ORE `InputParameters`와 같음).
 
 ### 1.3 CurveConfigurations: 커브 하나를 만드는 레시피
 
@@ -265,7 +265,7 @@ class CurveConfigurations:
 
 **왜**: 커브는 "시세 목록 + 헬퍼 종류 + 관례 + 보간 + 의존 커브"로 완전히 정해진다. 이것을 설정으로 두면 새 커브를 추가할 때 코드를 바꾸지 않는다.
 
-**QuantTool**: `configs/market/curves/ust.yaml` → `data/configuration/curveconfig.py`의 `YieldCurveConfig`(segments: `ZeroCouponBill`, `FixedRateBond`).
+**QuantTool**: `configs/market/curves/ust.yaml` → `data/configuration/curveconfig.py`의 `YieldCurveConfig`(`curve_id`, 세그먼트별 `quotes`·`conventions`, `interpolation_variable/method`, `discount_curve`). 세그먼트 종류 `ZeroCouponBill`·`FixedRateBond`는 par yield 곡선용 확장이다.
 
 ### 1.4 TodaysMarketParameters: 오늘 시장에 무엇을 둘지
 
@@ -310,7 +310,7 @@ class YieldCurveSpec(CurveSpec):         # "Yield/EUR/EUR6M" 파싱 결과
 - **한 레시피를 여러 이름이 공유한다.** `EUR-EONIA` 지수와 EUR 할인 커브가 같은 `EUR1D` 커브 객체 하나를 쓴다.
 - **configuration**: 같은 이름 `discountCurve("EUR")`이 용도에 따라 다른 커브를 가리키게 할 수 있다. 예를 들어 가격결정용과 모델 캘리브레이션용(담보 통화별 할인)을 구분한다. 대부분 `"default"` 하나만 쓴다.
 
-**QuantTool**: `configs/market/todaysmarket.yaml`(`yield_curves: [UST]`) → `data/configuration/todaysmarketparameters.py`. configuration 구분과 이름 → 레시피 매핑은 아직 없다. 지금은 이름과 레시피가 같다.
+**QuantTool**: `configs/market/todaysmarket.yaml` → `data/configuration/todaysmarketparameters.py`(`configurations`, `discounting_curves`, `yield_curves`, `mapping`, `curve_specs`), `curvespec.py`(`parse_curve_spec`). 지금 시장에 두는 종류는 DiscountCurve와 YieldCurve다.
 
 ### 1.5 TodaysMarket: 레시피 + 시세 → 시장 객체 (구축 한 줄씩)
 
@@ -374,7 +374,7 @@ market = TodaysMarket(asof, tm_params, loader, curve_configs)
 - **asof 고정 + 연결 끊기**: 오늘 시장은 한 번 만들면 변하지 않는다. 흔드는 일은 SimMarket이 한다.
 - **Handle로 보관**: 바깥에서 받은 Handle이 나중에 다른 커브로 다시 연결될 수 있다(RelinkableHandle).
 
-**QuantTool**: `data/marketdata/todaysmarket.py` `TodaysMarket`(asof 고정, `freeze`, `preserve_quote_linkage`), `market.py` `MarketImpl`, `dependencygraph.py`, `yieldcurve.py` `YieldCurveBuilder`.
+**QuantTool**: `data/marketdata/todaysmarket.py` `TodaysMarket`(configuration별 구축, 레시피당 한 번, asof 고정, `freeze`, `preserve_quote_linkage`), `market.py` `MarketImpl`(`(configuration, YieldCurveType, 이름)` 보관, default 대체), `dependencygraph.py`, `yieldcurve.py`.
 
 ### 1.6 Market 규격: 가격결정 코드가 아는 유일한 것
 
@@ -404,7 +404,7 @@ euribor.fixing(Date(5, 8, 2016))                      # 미래 날짜 → 예측
 vol = market.equityVol("SPX").blackVol(1.0, 4500.0)
 ```
 
-**QuantTool**: `data/marketdata/market.py`의 `Market`. `yield_curve`, `quote`는 있고 `index`, `equity_spot`, `dividend_curve`, `equity_vol`은 자리만 있다(`NotImplementedError`). `discount_curve`는 아직 없다.
+**QuantTool**: `data/marketdata/market.py`의 `Market`: `discount_curve`, `yield_curve`(configuration 인자), `active`. `index`, `equity_spot`, `dividend_curve`, `equity_vol`은 자리만 있다(`NotImplementedError`).
 
 ---
 
@@ -489,7 +489,7 @@ portfolio = Portfolio(); portfolio.add(swap)
 - **계약서에는 엔진·모델·커브 객체가 없다.** 이름만 있다(`EUR-EURIBOR-6M`, 통화 EUR). 같은 계약서를 어느 시장에든 연결할 수 있는 이유다.
 - **레그를 공통 필드 + 종류별 내용으로 나눈다.** 새 레그 종류(CMS, CPI, Equity 등)를 추가해도 Swap 코드는 그대로다.
 
-**QuantTool**: `positions/ust_book.yaml` → `data/portfolio/bond.py` `Bond`(pydantic), `trade.py` `Trade`, `portfolio.py` `Portfolio`. LegData와 LegBuilder는 Swap을 만들 때 추가할 예정이다.
+**QuantTool**: `positions/ust_book.yaml` → `data/portfolio/bond.py`(`Bond`, `BondData`), `legdata.py`(`LegData`, `FixedLegData`, `ScheduleData`), `trade.py`(`Trade`, `Envelope`), `portfolio.py`(`Portfolio`).
 
 ### 2.2 EngineData: 상품 유형 → 평가 방법
 
@@ -520,7 +520,7 @@ class EngineData:
 
 **왜**: 평가 방법은 계약이 아니라 **기관의 선택**이다. 같은 버뮤단을 LGM 격자로 할지 몬테카를로로 할지는 이 파일 한 줄로 바꾼다. 계약서는 그대로 둔다.
 
-**QuantTool**: `configs/pricing/engines.yaml`(`Bond: {model: DiscountedCashflows, engine: DiscountingBondEngine}`) → `data/configuration/enginedata.py`.
+**QuantTool**: `configs/pricing/engines.yaml`(`products: {Bond: {model: DiscountedCashflows, engine: DiscountingRiskyBondEngine}}`) → `data/configuration/enginedata.py` `EngineData`.
 
 ### 2.3 EngineBuilder: (model, engine) 하나를 맡는 기술자
 
@@ -572,7 +572,7 @@ class SwapEngineBuilder(SwapEngineBuilderBase):
 - **같은 키면 같은 엔진**을 재사용한다(EUR 스왑 1000개 → 엔진 1개). 메모리가 줄고, 커브가 바뀌면 그 엔진 하나만 통지받는다.
 - **(model, engine)으로 등록**한다. engines.yaml의 선택과 빌더가 1:1로 맞는다.
 
-**QuantTool**: `data/portfolio/enginefactory.py` `EngineBuilder`(키별 캐시 내장, `make(*keys)`가 engineImpl 역할), `builders/bond.py` `DiscountingBondEngineBuilder`.
+**QuantTool**: `data/portfolio/enginefactory.py`(`EngineBuilder`, `CachingPricingEngineBuilder`의 `key_impl`/`engine_impl`), `builders/bond.py`(`BondDiscountingEngineBuilder`, ORE와 같은 키). 이름 조회는 오버로드 대신 `engine_name`.
 
 ### 2.4 LegBuilder: LegData → QuantLib Leg(현금흐름 목록)
 
@@ -601,7 +601,7 @@ class FloatingLegBuilder(LegBuilder):        # legType "Floating"
 
 **왜**: 레그 만드는 법을 상품마다 반복하지 않는다. Swap, Swaption의 기초 스왑, 캡의 레그가 모두 같은 LegBuilder를 쓴다.
 
-**QuantTool**: 아직 없다(`legdata.py` 예정). `Bond.build`가 일정을 직접 만든다.
+**QuantTool**: `data/portfolio/legbuilders.py`(`LegBuilder`, `FixedLegBuilder`), `legdata.py`(`make_fixed_leg`). 변동 레그는 예정.
 
 ### 2.5 EngineFactory: 기술자 사무실의 접수 창구
 
@@ -633,7 +633,7 @@ class EngineFactory:
 
 **왜**: **팩토리를 만들 때 넘긴 시장**이 모든 빌더에 전달된다. 그래서 `EngineFactory(data, todaysMarket)`과 `EngineFactory(data, simMarket)`의 차이만으로 같은 계약이 다른 시장에 연결된다. 3.8에서 이 사실을 그대로 쓴다.
 
-**QuantTool**: `data/portfolio/enginefactory.py` `EngineFactory(engine_data, market, conventions)`, `from_config(cfg, market)`, `builder(trade_type)`, `conventions(name)`.
+**QuantTool**: `data/portfolio/enginefactory.py` `EngineFactory(engine_data, market, configurations)`, `from_config(cfg, market)`, `builder(trade_type)`, `leg_builder(leg_type)`, `market()`, `MarketContext`.
 
 ### 2.6 Swap::build: 데이터가 상품이 되는 순간
 
@@ -695,7 +695,7 @@ for swap in swaps:                                              # 1000개
 portfolio.build(EngineFactory(engine_data, any_market))         # any_market만 바꾸면 전부 다시 연결
 ```
 
-**QuantTool**: `data/portfolio/bond.py` `Bond.build`가 같은 순서로 동작한다. `factory.builder("Bond")` → `ql.FixedRateBond` → `builder.engine(self.discount)` → `InstrumentWrapper`.
+**QuantTool**: `data/portfolio/bond.py` `Bond.build`가 ORE `Bond::build` 순서로 동작한다: `builder("Bond")` → `leg_builder("Fixed").build_leg` → `ql.Bond` → `builder.engine(통화, 신용, 증권, 기준 커브, income)` → `VanillaInstrument(상품, 승수)`.
 
 ### 2.7 Model: 엔진 빌더 안에서 만드는 동학 모델 (간단히)
 
@@ -750,7 +750,7 @@ class SimpleScenario(Scenario): ...      # dict 기반 구현
 
 **왜**: 시나리오는 시장 객체가 아니라 **좌표(키) → 숫자**다. 그래서 민감도·스트레스·과거 변화·PCA 같은 시나리오 생성 규칙이 모두 같은 형태의 결과를 내고, 시장 적용은 한 곳(`applyScenario`)에서 한다.
 
-**QuantTool**: `qle/scenario.py` `RiskFactorKey(kind, name, point)`(정수 대신 `("5Y",)` 같은 라벨), `analytics/scenario/scenario.py` `Scenario(label, shifts)`(항상 기준 대비 이동량).
+**QuantTool**: `qle/scenario.py`(`KeyType`, `RiskFactorKey(key_type, name, index)`, `Scenario`, `SimpleScenario`, `DeltaScenario`). ORE와 같다.
 
 ### 3.2 ScenarioSimMarketParameters: 흔들 수 있는 격자를 정한다
 
@@ -807,7 +807,7 @@ class YieldCurveRollDown(Enum): ConstantDiscounts, ForwardForward
 
 **스마일 동학(SmileDynamics)이 여기 있다는 점이 중요하다.** spot이 움직일 때 vol 서페이스를 행사가 기준으로 붙잡을지(StickyStrike) moneyness 기준으로 붙잡을지(StickyMoneyness)를 **시뮬레이션 시장이** 정한다. SSR 같은 다른 동학 규칙도 이 자리에 들어간다. 계약·엔진은 모른다.
 
-**QuantTool**: `configs/scenario/simmarket.yaml` → `data/configuration/simmarketparameters.py` `ScenarioSimMarketParameters`(커브별 tenors, `spreaded`, `roll_down: ForwardForward`). vol 격자와 스마일 동학은 예정이다.
+**QuantTool**: `configs/scenario/simmarket.yaml` → `data/configuration/scenariosimmarketparameters.py`(`base_currency`, `currencies`, `yield_curves.names/tenors/interpolation/extrapolation/roll_down`). vol 격자와 스마일 동학은 주식 줄기에서 추가한다.
 
 ### 3.3 ScenarioSimMarket: 초기 시장을 격자로 다시 표현한 "흔들 수 있는 시장"
 
@@ -869,7 +869,7 @@ sim.applyScenario(s)                                  # 이 시장에 연결된 
 - **spreaded 모드**는 기준 상태에서 원 커브와 정확히 같아서 "격자로 바꾼 것 자체"에서 오는 오차가 없다.
 - **흔드는 곳이 격자 Quote 하나뿐**이라 시나리오를 적용하고 되돌리기 쉽다.
 
-**QuantTool**: `analytics/scenario/simmarket.py` `SimMarket`(`update`, `reset`, `active`), `ScenarioSimMarket`(`sim_data`, `base_values`, `apply_scenario`, spreaded = `PiecewiseZeroSpreadedTermStructure`, ForwardForward roll), `base_reconciliation`.
+**QuantTool**: `analytics/scenario/simmarket.py` `SimMarket`(`update`, `update_scenario`, `reset`, `active`), `ScenarioSimMarket`(`sim_data`, `sim_data_times`, `base_scenario`, `base_scenario_absolute`, `apply_scenario`, ForwardForward roll). 격자 커브는 `qle/termstructures.py`(linearZero만).
 
 ### 3.4 SensitivityScenarioData: 무엇을 얼마나, 어떤 방식으로 흔들지
 
@@ -978,7 +978,7 @@ class SensitivityScenarioGenerator(ShiftScenarioGenerator):
 - 결과는 목표 크기(기본 1bp)로 다시 환산한다. `scaling = targetShiftSize / actualShiftSize`
 - 즉 **ORE에도 "상품별로 민감도 계산 규칙을 바꾸는" 공식 경로가 있다.** 다만 바꿀 수 있는 것은 이동 크기·방식이다. SSR처럼 요인 간 연동 규칙은 시뮬레이션 시장의 스마일 동학(3.2) 쪽 몫이다.
 
-**QuantTool**: `analytics/scenario/sensitivityscenariogenerator.py` `SensitivityScenarioGenerator`(key rate +1bp와 평행 +1bp, Forward만). Central·gamma·템플릿은 예정이다.
+**QuantTool**: `analytics/scenario/sensitivityscenariogenerator.py`, `shiftscenariogenerator.py`(`ScenarioDescription`, `apply_curve_shift`, `triangle_weights`), `scenariogenerator.py`. Up/Down, cross gamma, 템플릿까지 같다.
 
 ### 3.6 ValuationEngine, ValuationCalculator, NPVCube: 반복 평가 루프
 
@@ -1020,7 +1020,7 @@ class ValuationEngine:
 - **계산기를 꽂는 구조**라 같은 루프로 NPV, 현금흐름, 행사 여부 등을 기록한다.
 - 날짜 축은 노출 시뮬레이션용이다. 민감도는 `DateGrid("1,0W")`, 즉 날짜 하나만 쓴다.
 
-**QuantTool**: `analytics/engine/valuationengine.py` `ValuationEngine(asof, dates, sim_market).build_cube(portfolio)` → `NPVCube(base, npv)`(pandas). 계산기 구조는 없고 NPV만 기록한다.
+**QuantTool**: `analytics/cube/npvcube.py` `NPVCube`(numpy), `analytics/engine/valuationcalculator.py`(`NPVCalculator`), `valuationengine.py` `ValuationEngine(today, dates, sim).build_cube(portfolio, cube, calculators)`.
 
 ### 3.7 SensitivityCube: NPV 표 → delta, gamma, cross gamma
 
@@ -1043,7 +1043,7 @@ class SensitivityCube:
 ```
 - ORE의 delta는 "**설정한 이동 1회당 NPV 변화**"다(1bp 이동이면 1bp당 손익). 단위 이동(1.0)당 미분값이 아니다.
 
-**QuantTool**: `analytics/engine/sensitivityanalysis.py` `SensitivityCube(cube, data)`의 `key_rate_dv01(curve)`, `parallel_dv01(curve)`(Forward delta만). gamma·cross gamma는 예정이다.
+**QuantTool**: `analytics/cube/sensitivitycube.py` `SensitivityCube`(`delta`, `gamma`, `cross_gamma`, `report`, `delta_table`). 공식과 scaling이 ORE와 같다.
 
 ### 3.8 SensitivityAnalysis: 위 전부를 원본 순서로
 
@@ -1111,7 +1111,7 @@ cube.delta("Swap_20y", RiskFactorKey(KeyType.DiscountCurve, "EUR", 6))       # E
 cube.delta("Swap_20y", RiskFactorKey(KeyType.IndexCurve, "EUR-EURIBOR-6M", 11))   # 예측 커브 10Y
 ```
 
-**QuantTool**: `SensitivityAnalysis(portfolio, market, cfg).generate_sensitivities()` → `sensi_cube().key_rate_dv01("UST")`가 a)~f)를 같은 순서로 한다. 템플릿 분할은 없다.
+**QuantTool**: `SensitivityAnalysis(portfolio, market, configuration, engine_data, sim_params, sensitivity_data).generate_sensitivities()` → `sensi_cubes()`, `report()`, `delta_table(...)`. 템플릿 분할까지 같은 순서다.
 
 ### 3.9 ParSensitivityAnalysis: zero 민감도 → 헷지 상품(par) 민감도
 
@@ -1158,21 +1158,21 @@ class ParSensitivityConverter:
 
 | 단계 | ORE | QuantTool | 상태 |
 |---|---|---|---|
-| 시세 | `MarketDatum`, `Loader`, `CSVLoader` | `data/marketdata/loader.py` | ✓ (DuckDBLoader 예정) |
-| 관례 | `Conventions` (전역) | `data/configuration/conventions.py` (전달) | ✓ |
+| 시세 | `MarketDatum`, `Loader`, `CSVLoader`, `InMemoryLoader` | `data/marketdata/marketdatum.py`, `loader.py` | ✓ (DuckDBLoader 예정) |
+| 관례 | `Conventions`, 전역 `InstrumentConventions` | `data/configuration/conventions.py` | ✓ |
 | 커브 레시피 | `CurveConfigurations`, `YieldCurveConfig` | `data/configuration/curveconfig.py` | ✓ (UST) |
-| 오늘 시장 구성 | `TodaysMarketParameters` (+configuration, 이름→레시피) | `todaysmarketparameters.py` | ✓ 단순형 |
+| 오늘 시장 구성 | `TodaysMarketParameters`, `MarketConfiguration`, `CurveSpec` | `todaysmarketparameters.py`, `curvespec.py` | ✓ |
 | 오늘 시장 | `TodaysMarket`, `MarketImpl`, `DependencyGraph`, `YieldCurve` | `todaysmarket.py`, `market.py`, `dependencygraph.py`, `yieldcurve.py` | ✓ |
-| 계약 | `Trade`, `Envelope`, `LegData`, `Portfolio` | `trade.py`, `bond.py`, `portfolio.py` | ✓ Bond (LegData 예정) |
+| 계약 | `Trade`, `Envelope`, `BondData`, `LegData`, `Portfolio` | `trade.py`, `bond.py`, `legdata.py`, `portfolio.py` | ✓ Bond |
 | 엔진 선택 | `EngineData` | `enginedata.py` | ✓ |
-| 엔진 | `EngineBuilder`, `CachingPricingEngineBuilder`, `EngineFactory`, `LegBuilder` | `enginefactory.py`, `builders/bond.py` | ✓ (LegBuilder 예정) |
+| 엔진 | `EngineBuilder`, `CachingPricingEngineBuilder`, `EngineFactory`, `LegBuilder` | `enginefactory.py`, `legbuilders.py`, `builders/bond.py` | ✓ (Fixed 레그) |
 | 모델 | `ModelBuilder`, 재캘리브레이션 | `data/model/` | 예정 |
-| 리스크 요인 | `RiskFactorKey`, `Scenario` | `qle/scenario.py`, `analytics/scenario/scenario.py` | ✓ |
-| 격자 | `ScenarioSimMarketParameters` (+스마일 동학) | `simmarketparameters.py` | ✓ 커브 (vol·동학 예정) |
-| 시뮬레이션 시장 | `SimMarket`, `ScenarioSimMarket` (spreaded) | `analytics/scenario/simmarket.py` | ✓ |
-| 민감도 설정 | `SensitivityScenarioData` (Forward/Central, gamma, 템플릿) | `SensitivityScenarioData` (bp만) | 단순형 |
-| 생성기 | `SensitivityScenarioGenerator` | `sensitivityscenariogenerator.py` | ✓ Forward (Central·gamma·템플릿 예정) |
-| 반복 평가 | `ValuationEngine`, `ValuationCalculator`, `NPVCube` | `valuationengine.py` `NPVCube` | ✓ NPV만 |
-| 민감도 결과 | `SensitivityCube` (delta·gamma·crossGamma) | `SensitivityCube` (key rate·평행 DV01) | 단순형 |
+| 리스크 요인 | `RiskFactorKey`, `Scenario`, `DeltaScenario` | `qle/scenario.py` | ✓ |
+| 격자 | `ScenarioSimMarketParameters` (+스마일 동학) | `scenariosimmarketparameters.py` | ✓ 커브 (vol·동학 예정) |
+| 시뮬레이션 시장 | `SimMarket`, `ScenarioSimMarket` (spreaded) | `analytics/scenario/simmarket.py` | ✓ (linearZero) |
+| 민감도 설정 | `SensitivityScenarioData` (ShiftData, 템플릿, gamma, cross gamma) | `sensitivityscenariodata.py` | ✓ 커브 |
+| 생성기 | `ShiftScenarioGenerator`, `SensitivityScenarioGenerator` | `shiftscenariogenerator.py`, `sensitivityscenariogenerator.py` | ✓ |
+| 반복 평가 | `ValuationEngine`, `ValuationCalculator`, `NPVCube` | `valuationengine.py`, `valuationcalculator.py`, `cube/npvcube.py` | ✓ NPV |
+| 민감도 결과 | `SensitivityCube` (delta·gamma·crossGamma) | `cube/sensitivitycube.py` | ✓ |
 | par 변환 | `ParSensitivityAnalysis`, `ParSensitivityConverter` | — | 예정 |
 | 스트레스·PnL explain | `StressTest`, `PnlExplainReport` | — | 예정 |

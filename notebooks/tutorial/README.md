@@ -7,11 +7,11 @@
 |---|---|---|
 | `00_quantlib_basics` | SimpleQuote, Handle, Observer, RelinkableHandle, 전역 평가일 — QuantLib만으로 | A QuantLib Guide, Library infrastructure |
 | `01_quotes_to_curve` | 재무부 par yield → 헬퍼 → 부트스트랩을 손으로, 그다음 `TodaysMarket`과 비교. 얼린 시장 vs 시세 연결 유지 | `src/quanttool/data/marketdata/yieldcurve.py`, `src/quanttool/qle/` |
-| `02_todaysmarket_step_by_step` | 레시피 → Loader → QuoteStore → 빌더 → 의존 그래프 → `MarketImpl` 보관소, 한 줄씩 | `src/quanttool/data/marketdata/`, `data/configuration/`, `data/utilities/` |
-| `03_trade_to_npv` | 계약서(YAML) → `EngineFactory.builder` → 엔진 → NPV, QuantLib 직접 계산과 비교 | `src/quanttool/data/portfolio/` |
-| `04_simmarket_sensitivity` | 격자, `ScenarioSimMarket`(spreaded/절대), 손으로 만든 시나리오, `ValuationEngine`, `SensitivityAnalysis` | `src/quanttool/analytics/scenario/`, `analytics/engine/` |
+| `02_todaysmarket_step_by_step` | 레시피(configuration·커브 지정) → Loader·MarketDatum → 빌더 → 의존 그래프 → `MarketImpl` 보관소, 한 줄씩 | `src/quanttool/data/marketdata/`, `data/configuration/`, `data/utilities/` |
+| `03_trade_to_npv` | BondData·LegData → `EngineFactory.builder`·`leg_builder` → 엔진(키 캐시) → NPV, QuantLib 직접 계산과 비교 | `src/quanttool/data/portfolio/` |
+| `04_simmarket_sensitivity` | 격자, `ScenarioSimMarket`(spreaded/절대), `DeltaScenario`, 생성기·NPVCube·`ValuationEngine`, `SensitivityAnalysis`(delta·gamma·템플릿) | `src/quanttool/analytics/scenario/`, `analytics/engine/` |
 | `05_time_and_history` | `SimMarket.update`로 theta, 날짜별 `TodaysMarket` → 커브 이력 표, 평가일이 바꾸는 것 | `src/quanttool/analytics/scenario/simmarket.py` |
 
-- 데이터는 `tests/fixtures/ust_par_sample.csv` **합성 샘플**(재무부 CSV와 형식만 같음)이다. 흐름 이해용이고 숫자로 시장을 해석하지 않는다.
+- 데이터는 `tests/fixtures/market_ust_sample.txt` **합성 샘플**(ORE market.txt 형식)이다. 흐름 이해용이고 숫자로 시장을 해석하지 않는다.
 - 실행 준비: `pip install -e ".[dev,notebook]"`
 - 실제 데이터로 시장을 읽는 분석 노트북은 `notebooks/01_ust_curve.ipynb`.
