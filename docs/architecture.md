@@ -195,7 +195,7 @@ from datetime import date
 from quanttool.config import load_config
 from quanttool.market.quotes import read_quotes
 from quanttool.market import build_market
-from quanttool.portfolio import Portfolio
+from quanttool.portfolio import Portfolio, trade
 from quanttool.analysis.scenarios import parallel, from_loadings, ssr
 from quanttool.analysis.risk import key_rate, factor_delta, scenario_pnl, theta
 
@@ -204,8 +204,11 @@ quotes = read_quotes("tests/fixtures/market_sample.txt")
 asof = date(2026, 10, 23)
 
 market = build_market(asof, quotes[asof], cfg)                  # 커브·지수·주식·모델을 한 번, 이름으로
-book = Portfolio.from_file("positions/ust_book.yaml", "positions/krw_swaps.yaml",
-                           "positions/spx_options.yaml").build(market, cfg)
+book = Portfolio.from_file("positions/ust_book.yaml", "positions/krw_swaps.yaml",   # 예시 북
+                           "positions/spx_options.yaml", products=cfg.products)
+book = Portfolio([*book.trades.values(),                                          # 코드로 한 건 추가
+                  trade(cfg, "SPX_EURO", id="SPX_3M_C105", option_type="Call", strike=6300,
+                        expiry=date(2027, 1, 22), quantity=5)]).build(market, cfg)
 book.npvs()
 
 kr = key_rate(book, market, cfg.risk, "CD91")                   # 예측 커브 delta·gamma (만기 × 거래)
