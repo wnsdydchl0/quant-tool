@@ -1,0 +1,3 @@
+# 상품 종류 → 엔진 (portfolio.ENGINES). 거래의 engine 필드로 덮어쓸 수 있다.
+Bond: DiscountingBond
+IRSwap: DiscountingSwap

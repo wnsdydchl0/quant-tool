@@ -47,7 +47,7 @@ def test_npv_matches_direct_quantlib(book, market):
 
 
 def test_one_engine_per_curve(book):
-    assert len(book.instruments) == 4 and list(book.engines) == ["UST"]
+    assert len(book.instruments) == 4 and list(book.engines) == [("DiscountingBond", "UST")]
 
 
 def test_same_trades_on_another_market(config, quotes, book):

@@ -192,6 +192,7 @@ class Config(_Model):
     conventions: dict[str, Conventions]
     curves: dict[str, CurveConfig]
     indices: dict[str, IndexConfig] = {}
+    pricing: dict[str, str] = {}  # 상품 종류 → 엔진 이름 (portfolio.ENGINES)
     risk: RiskConfig = RiskConfig()
 
     def model_post_init(self, _ctx) -> None:
@@ -253,6 +254,7 @@ def load_config(root: str | Path = "configs") -> Config:
             "conventions": _read(root / "conventions" / "rates.yaml"),
             "curves": curves,
             "indices": optional("indices.yaml"),
+            "pricing": optional("pricing.yaml"),
             "risk": optional("risk.yaml"),
         }
     )

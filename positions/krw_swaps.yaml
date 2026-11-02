@@ -1,0 +1,5 @@
+# 예시 KRW IRS (CD91 vs 고정, KOFR 할인). 금리·만기는 예시 값이다.
+- {id: IRS_5Y_PAY, type: IRSwap, notional: 1.0e10, fixed_rate: 0.0288, pay_fixed: true,
+   start_date: 2026-10-26, maturity_date: 2031-10-26, conventions: KRW_IRS, index: CD91, discount: KOFR}
+- {id: IRS_10Y_REC, type: IRSwap, notional: 5.0e9, fixed_rate: 0.0300, pay_fixed: false,
+   start_date: 2026-10-26, maturity_date: 2036-10-26, conventions: KRW_IRS, index: CD91, discount: KOFR}
