@@ -1,4 +1,4 @@
-"""주식 시장 객체: 현물, 배당 커브, IV 서페이스. 모두 MarketObject 규격(factors.py)을 따른다.
+"""주식 시장 객체: 현물, 배당 커브, IV 서페이스. 모두 MarketObject 규격(market.py)을 따른다.
 
     SPX       EquitySpot   요인 "SPX/spot" = 상대 이동 (값 = 기준 × (1 + 이동))
     SPX_DIV   CurveFactors 평탄 배당률 기준 커브 + 격자 제로 이동 (금리 커브와 같은 클래스)
@@ -15,9 +15,8 @@ from datetime import date
 
 import QuantLib as ql
 
-from .config import EquityConfig
-from .curves import evaluation_date, to_ql_date
-from .factors import CurveFactors
+from ..config import EquityConfig
+from .curves import CurveFactors, evaluation_date, to_ql_date
 
 
 class EquitySpot:

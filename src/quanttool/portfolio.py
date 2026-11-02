@@ -20,8 +20,8 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 from .config import Config
-from .curves import to_ql_date
 from .market import Market
+from .market.curves import to_ql_date
 
 
 class Trade(BaseModel):

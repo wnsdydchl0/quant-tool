@@ -41,15 +41,17 @@ QuantLib으로 다음 흐름을 다룬다.
 
 ```
 src/quanttool/
-  config.py      설정 읽기: 관례, 커브 레시피(구간·의존), 지수, 주식, 엔진 선택, 리스크. build_order(커브 의존 순서)
-  quotes.py      시세 파일 → {날짜: {키: 값}}
-  curves.py      시세 → QuantLib 커브 (HELPERS: bill BEY·par bond·deposit·OIS·swap, 듀얼 커브 할인), 진단·커브 표
-  factors.py     시장 객체 규격(MarketObject)과 CurveFactors (기준 커브 + 격자 제로 이동)
-  equity.py      EquitySpot, VolSurface(격자 vol), HestonModelObject(캘리브레이션 파생 객체)
-  market.py      Market (이름 → 객체, 지수, 요인, 시나리오 적용·해제, 의존 순서 refresh, roll), build_market
-  portfolio.py   Bond·IRSwap·EquityOption 명세 → QuantLib 상품, ENGINES, Portfolio (build, npvs)
-  scenarios.py   시나리오 규칙 함수: parallel, bucket(삼각 가중), from_loadings, combine, ssr
-  risk.py        key_rate(delta·gamma, 상품별 규칙), factor_delta(아무 요인·규칙), cross_gamma, scenario_pnl, theta
+  config.py          설정 읽기: 관례, 커브 레시피(구간·의존), 지수, 주식, 엔진 선택, 리스크. build_order(커브 의존 순서)
+  market/            시장: 시세 → 시장 객체 → 이름으로 묶은 Market
+    quotes.py        시세 파일 → {날짜: {키: 값}}
+    curves.py        시세 → QuantLib 커브 (HELPERS: bill BEY·par bond·deposit·OIS·swap, 듀얼 커브 할인), 진단·커브 표,
+                     CurveFactors (기준 커브 + 격자 제로 이동 = 흔들 수 있는 커브)
+    equity.py        EquitySpot, VolSurface(격자 vol), HestonModelObject(캘리브레이션 파생 객체)
+    market.py        MarketObject 규격, Market (이름 → 객체, 지수, 요인, 시나리오 적용·해제, 의존 순서 refresh, roll), build_market
+  portfolio.py       Bond·IRSwap·EquityOption 명세 → QuantLib 상품, ENGINES, Portfolio (build, npvs)
+  analysis/          시나리오 분석
+    scenarios.py     시나리오 생성 함수: parallel, bucket(삼각 가중), from_loadings, combine, ssr
+    risk.py          key_rate(delta·gamma, 상품별 규칙), factor_delta(아무 요인·규칙), cross_gamma, scenario_pnl, theta
 configs/
   conventions/rates.yaml   관례 (UST, KRW_OIS, KRW_IRS)
   curves/*.yaml            커브 레시피: UST, KOFR(OIS), CD91(듀얼 커브: KOFR 할인)
@@ -65,7 +67,7 @@ notebooks/                 tutorial/ 00~06, 01_ust_curve
 
 ## 3. 객체 가이드
 
-**`Market`** (`market.py`) — 시장 객체 묶음
+**`Market`** (`market/market.py`) — 시장 객체 묶음
 - 만들기: `build_market(asof, quotes[asof], cfg, linked=False)`
   - 커브는 의존 먼저 순서(`cfg.build_order()`)로 만든다.
   - 그다음 지수, 주식 객체, 파생 모델을 만든다.
@@ -82,7 +84,7 @@ notebooks/                 tutorial/ 00~06, 01_ust_curve
   - 바뀐 객체와 **그에 기대는 객체**(`depends_on`)를 의존 순서로 `refresh`한다.
 - 시간: `.roll(d)`(평가일 d, ForwardForward, 의존 순서, 지난 fixing은 오늘 선도로), `.active()`(평가일을 시장 날짜로 두는 with 블록)
 
-**시장 객체 규격 `MarketObject`** (`factors.py`) — 새 객체는 이것만 맞추면 시장·시나리오·리스크가 그대로 동작한다
+**시장 객체 규격 `MarketObject`** (`market/market.py`) — 새 객체는 이것만 맞추면 시장·시나리오·리스크가 그대로 동작한다
 - `.handle`: 상품·엔진이 연결되는 자리
 - `.factors()`: `{이름: SimpleQuote}` (값은 기준 대비 이동, 기준 0)
 - `.refresh()`: 요인이 바뀐 뒤 다시 만들 일이 있으면 여기서 한다. 커브는 Observer로 따라와서 할 일 없음
@@ -104,7 +106,7 @@ notebooks/                 tutorial/ 00~06, 01_ust_curve
   - `.params()`, `.calibrated`, `.calibration_errors()`(헬퍼 가격 오차), `.helpers()`, `.depends_on`
   - `recalibrate_on`(설정): 이 객체들이 바뀌면 다시 캘리브레이션한다. 목록 밖(예: 금리)이 바뀌면 파라미터를 고정하고 프로세스 Handle로만 따라온다.
 
-**커브** (`curves.py`)
+**커브** (`market/curves.py`)
 - 구간 종류마다 헬퍼 함수 `HELPERS[type](key, quote, tenor, segment, ctx)`
   - `ctx`: 관례, 결제일, 할인 커브 Handle, 지수
 - 커브 레시피(`CurveConfig`)
@@ -129,7 +131,7 @@ notebooks/                 tutorial/ 00~06, 01_ust_curve
 | `IRSwap` (고정 vs Ibor) | `index`(예측), `discount` | `DiscountingSwap` |
 | `EquityOption` (유럽형) | `underlying`, `curve`, `dividend`, `vol`, (`model`) | `AnalyticBS`, `FdBS`(격자는 `pricing.yaml engines`), `AnalyticHeston` |
 
-**시나리오** (`scenarios.py`): 모두 `dict[요인 키, 이동]`을 돌려준다
+**시나리오** (`analysis/scenarios.py`): 모두 `dict[요인 키, 이동]`을 돌려준다
 - `parallel(market, "UST", 0.001)`
 - `bucket(market, "UST", shift_tenors, j, size)`: 삼각 가중
 - `from_loadings("UST", {만기: 로딩}, 크기)`, `combine(s1, s2, …)`
@@ -137,7 +139,7 @@ notebooks/                 tutorial/ 00~06, 01_ust_curve
   Δσ(T,K) = σ(T, K·(1+r)^(x−1)) − σ(T,K)를 함께 담는다.
   x=1이면 sticky strike, x=0이면 sticky moneyness.
 
-**리스크** (`risk.py`)
+**리스크** (`analysis/risk.py`)
 - `key_rate(book, market, cfg.risk, "UST") → {"delta": 만기 × 거래, "gamma": …}` (1bp당 손익)
   - 상품별 규칙: `risk.overrides[거래 id 또는 종류] = {shift_size, scheme}`. 그 크기·방식으로 계산한 뒤 1bp로 환산한다.
   - 이동 만기: `risk.shift_tenors[커브]` (없으면 요인 격자)
@@ -150,11 +152,11 @@ notebooks/                 tutorial/ 00~06, 01_ust_curve
 ```python
 from datetime import date
 from quanttool.config import load_config
-from quanttool.quotes import read_quotes
+from quanttool.market.quotes import read_quotes
 from quanttool.market import build_market
 from quanttool.portfolio import Portfolio
-from quanttool.scenarios import parallel, from_loadings, ssr
-from quanttool.risk import key_rate, factor_delta, scenario_pnl, theta
+from quanttool.analysis.scenarios import parallel, from_loadings, ssr
+from quanttool.analysis.risk import key_rate, factor_delta, scenario_pnl, theta
 
 cfg = load_config("configs")
 quotes = read_quotes("tests/fixtures/market_sample.txt")

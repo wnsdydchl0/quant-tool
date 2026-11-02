@@ -16,9 +16,9 @@ from datetime import date
 
 import pandas as pd
 
-from .config import RiskConfig
-from .market import Market
-from .portfolio import Portfolio
+from ..config import RiskConfig
+from ..market import Market
+from ..portfolio import Portfolio
 from .scenarios import bucket
 
 

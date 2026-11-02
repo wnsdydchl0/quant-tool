@@ -4,7 +4,7 @@ import pytest
 import QuantLib as ql
 
 from quanttool.config import Config
-from quanttool.curves import helper_repricing, to_ql_date
+from quanttool.market.curves import helper_repricing, to_ql_date
 
 ASOF = date(2026, 10, 23)
 CAL = ql.SouthKorea(ql.SouthKorea.Settlement)

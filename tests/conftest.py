@@ -5,8 +5,8 @@ import pytest
 
 from quanttool.config import load_config
 from quanttool.market import build_market
+from quanttool.market.quotes import read_quotes
 from quanttool.portfolio import Portfolio
-from quanttool.quotes import read_quotes
 
 ROOT = Path(__file__).resolve().parents[1]
 ASOF = date(2026, 10, 23)

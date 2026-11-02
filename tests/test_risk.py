@@ -3,10 +3,10 @@ from datetime import date
 import pytest
 import QuantLib as ql
 
+from quanttool.analysis.risk import cross_gamma, key_rate, scenario_pnl, theta
+from quanttool.analysis.scenarios import bucket, combine, from_loadings, parallel, triangle_weight
 from quanttool.config import Override
-from quanttool.curves import DC, to_ql_date
-from quanttool.risk import cross_gamma, key_rate, scenario_pnl, theta
-from quanttool.scenarios import bucket, combine, from_loadings, parallel, triangle_weight
+from quanttool.market.curves import DC, to_ql_date
 
 ASOF = date(2026, 10, 23)
 BP = 1e-4
@@ -114,7 +114,7 @@ def test_theta_is_forward_forward(config, market, book):
     th = theta(book, market, nxt)
     assert market.date == ASOF
     # 직접: 초기 커브를 nxt로 굴린 ImpliedTermStructure
-    from quanttool.curves import evaluation_date
+    from quanttool.market.curves import evaluation_date
 
     with evaluation_date(nxt):
         implied = ql.YieldTermStructureHandle(

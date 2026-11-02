@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from quanttool.curves import to_ql_date
+from quanttool.analysis.risk import factor_delta
+from quanttool.analysis.scenarios import ssr
+from quanttool.market.curves import to_ql_date
 from quanttool.portfolio import Portfolio
-from quanttool.risk import factor_delta
-from quanttool.scenarios import ssr
 
 ROOT = Path(__file__).resolve().parents[1]
 

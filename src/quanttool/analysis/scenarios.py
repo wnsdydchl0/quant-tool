@@ -11,8 +11,8 @@ from collections.abc import Mapping
 
 import QuantLib as ql
 
-from .curves import DC
-from .market import Market
+from ..market import Market
+from ..market.curves import DC
 
 Scenario = dict[str, float]
 

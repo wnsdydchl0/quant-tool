@@ -5,7 +5,8 @@ import pytest
 import QuantLib as ql
 
 from quanttool.config import load_config
-from quanttool.curves import (
+from quanttool.market import build_market
+from quanttool.market.curves import (
     bill_price,
     bill_yield,
     curve_shape,
@@ -13,8 +14,7 @@ from quanttool.curves import (
     helper_repricing,
     to_ql_date,
 )
-from quanttool.market import build_market
-from quanttool.quotes import read_quotes
+from quanttool.market.quotes import read_quotes
 
 ASOF = date(2026, 10, 23)
 K = "BOND/YIELD/USD/UST/PAR/{}"
@@ -119,7 +119,7 @@ def test_frozen_curve_ignores_quotes_and_dates(config, quotes, market):
     before = market["UST"].discount(d)
     built.quotes()[K.format("10Y")].setValue(0.05)  # 시세를 바꾸고
     build_market(date(2026, 10, 22), quotes[date(2026, 10, 22)], config)  # 다른 날짜 시장을 만들고
-    with __import__("quanttool.curves", fromlist=["x"]).evaluation_date(
+    with __import__("quanttool.market.curves", fromlist=["x"]).evaluation_date(
         date(2027, 1, 1)
     ):  # 평가일을 옮겨도
         assert market["UST"].referenceDate() == to_ql_date(ASOF)

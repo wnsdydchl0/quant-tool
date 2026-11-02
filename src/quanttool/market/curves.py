@@ -1,4 +1,4 @@
-"""시세 → 일드커브 (QuantLib 부트스트랩), 그리고 커브 표·진단.
+"""시세 → 일드커브 (QuantLib 부트스트랩), 커브 표·진단, 요인 층(CurveFactors).
 
 - bill(1Y 이하): 재무부 bond-equivalent yield → 할인채 가격 헬퍼
 - 쿠폰채(2Y~): par yield = 쿠폰인 가상 채권(가격 100) 헬퍼
@@ -19,7 +19,7 @@ from datetime import date
 import pandas as pd
 import QuantLib as ql
 
-from .config import Config, Conventions, CurveConfig
+from ..config import Config, Conventions, CurveConfig
 
 _HALF_YEAR_DAYS = 182.5
 _CURVES = {
@@ -294,3 +294,53 @@ def curve_shape(table: pd.DataFrame, column: str = "par") -> pd.Series:
 
 def conventions_for(cfg: Config, curve: str) -> Conventions:
     return cfg.conventions[cfg.curves[curve].conventions]
+
+
+# --- 요인 층: 기준 커브 + 격자 제로 이동 (시장 객체)
+_FAR = "100Y"  # 마지막 격자점 뒤 평탄 외삽 끝점  # 마지막 격자점 뒤 평탄 외삽 끝점
+
+
+class CurveFactors:
+    """기준 커브 + 격자 만기별 제로금리 이동량(연속복리, 소수).
+
+    커브 = PiecewiseZeroSpreadedTermStructure(기준 커브, 이동량).
+    이동량이 0이면 기준 커브와 정확히 같다 (ORE spreaded 시뮬레이션 커브와 같은 아이디어).
+    격자점 사이 이동은 선형, 바깥은 평탄.
+    """
+
+    def __init__(self, base: ql.YieldTermStructure, asof: date, tenors: list[str]) -> None:
+        self.base = base
+        self.asof = asof
+        self.tenors = list(tenors)
+        ref = base.referenceDate()
+        dates = [ref + ql.Period(t) for t in self.tenors]
+        self.times = {t: DC.yearFraction(ref, d) for t, d in zip(self.tenors, dates, strict=True)}
+        self._quotes = {t: ql.SimpleQuote(0.0) for t in self.tenors}
+        self._base_link = ql.RelinkableYieldTermStructureHandle(base)
+        spreads = [ql.QuoteHandle(q) for q in self._quotes.values()]
+        # QuantLib 1.44의 이 클래스는 Quote 변경 시 enableExtrapolation 설정이 풀린다.
+        # 외삽 플래그 대신 마지막 Quote에 묶인 먼 끝점으로 평탄 외삽한다.
+        curve = ql.PiecewiseZeroSpreadedTermStructure(
+            self._base_link,
+            [*spreads, spreads[-1]],
+            [*dates, ref + ql.Period(_FAR)],
+            ql.Continuous,
+            ql.NoFrequency,
+            DC,
+        )
+        self.handle = ql.RelinkableYieldTermStructureHandle(curve)
+
+    def factors(self) -> dict[str, ql.SimpleQuote]:
+        return dict(self._quotes)
+
+    def refresh(self) -> None:
+        """Quote 변경이 Observer로 전파되므로 할 일 없음."""
+
+    def roll(self, d: date) -> None:
+        """ForwardForward: 오늘의 선도가 실현된다 (DF_d(t) = DF(d + t) / DF(d))."""
+        if d == self.asof:
+            self._base_link.linkTo(self.base)
+        else:
+            rolled = ql.ImpliedTermStructure(ql.YieldTermStructureHandle(self.base), to_ql_date(d))
+            rolled.enableExtrapolation()
+            self._base_link.linkTo(rolled)

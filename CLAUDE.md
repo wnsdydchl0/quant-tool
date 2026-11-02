@@ -1,7 +1,7 @@
 # QuantTool
 - 설계·현황·다음 단계는 docs/architecture.md. 데이터 수집·저장은 별도 레포 ../market-data (설계 docs/design.md, 제공 데이터 docs/data_catalog.md).
 - 핵심 아이디어 세 가지를 지킨다: 기초 객체는 이름으로 묶은 Market 하나, 시나리오는 {요인: 이동} + 규칙 함수, 포트폴리오는 포지션을 시장에 붙여 가격.
-- QuantLib을 그대로 쓰고, 추상화(클래스 계층, 등록부, 팩토리)는 두 번째 사용처가 생길 때만 만든다. 새 시장 객체는 factors.py의 MarketObject 규격만 맞춘다.
+- QuantLib을 그대로 쓰고, 추상화(클래스 계층, 등록부, 팩토리)는 두 번째 사용처가 생길 때만 만든다. 새 시장 객체는 market/market.py의 MarketObject 규격만 맞춘다.
 - 기능을 추가하면 docs/architecture.md 3장(객체 가이드)과 5장(확장)을 함께 갱신한다.
 - QuantLib API는 추측하지 말고 references/QuantLib-SWIG 또는 dir()/help()로 확인 후 사용. ORE(references/Engine)는 아이디어 참고용이고, 참고했으면 파일 경로를 남긴다.
 - references/는 gitignore 대상이다. 없으면 `scripts/fetch_references.sh`로 클론한다.

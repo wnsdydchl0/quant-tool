@@ -3,8 +3,8 @@ from datetime import date
 import pytest
 import QuantLib as ql
 
-from quanttool.curves import to_ql_date
 from quanttool.market import build_market
+from quanttool.market.curves import to_ql_date
 from quanttool.portfolio import Portfolio
 
 ASOF = date(2026, 10, 23)

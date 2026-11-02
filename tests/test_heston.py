@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 import QuantLib as ql
 
-from quanttool.curves import to_ql_date
-from quanttool.equity import HESTON_PARAMS
 from quanttool.market import Market, build_market
+from quanttool.market.curves import to_ql_date
+from quanttool.market.equity import HESTON_PARAMS
 from quanttool.portfolio import Portfolio
 
 ROOT = Path(__file__).resolve().parents[1]
