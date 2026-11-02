@@ -58,3 +58,10 @@ def market(config, quotes):
     from quanttool.market import build_market
 
     return build_market(ASOF, quotes[ASOF], config)
+
+
+@pytest.fixture
+def book(config, market):
+    from quanttool.portfolio import Portfolio
+
+    return Portfolio.from_file(ROOT / "positions" / "ust_bonds.yaml").build(market, config)
