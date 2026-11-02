@@ -36,3 +36,25 @@ def portfolio():
     from quanttool.data.portfolio import Portfolio
 
     return Portfolio.from_file(ROOT / "positions" / "ust_book.yaml")
+
+
+# --- 새 구조 (quanttool.config / market / portfolio / risk)
+@pytest.fixture
+def config():
+    from quanttool.config import load_config
+
+    return load_config(ROOT / "configs")
+
+
+@pytest.fixture
+def quotes():
+    from quanttool.quotes import read_quotes
+
+    return read_quotes(ROOT / "tests" / "fixtures" / "market_ust_sample.txt")
+
+
+@pytest.fixture
+def market(config, quotes):
+    from quanttool.market import build_market
+
+    return build_market(ASOF, quotes[ASOF], config)

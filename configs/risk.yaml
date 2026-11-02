@@ -1,0 +1,7 @@
+# 민감도 설정
+shift_size: 0.0001          # 보고 단위: 1bp (제로금리)
+scheme: Forward             # Forward | Central
+compute_gamma: true
+shift_tenors: {}            # 커브 → 이동 만기 (비우면 요인 격자 그대로)
+overrides: {}               # 거래 id 또는 상품 종류 → {shift_size, scheme}. 예: {Bond: {shift_size: 0.001, scheme: Central}}
+cross_gamma: []             # 요인 키 쌍. 예: [[UST/5Y, UST/10Y]]

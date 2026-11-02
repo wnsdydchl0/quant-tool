@@ -1,0 +1,10 @@
+# 미 재무부 par yield로 만드는 국채 커브
+name: UST
+quote_key: BOND/YIELD/USD/UST/PAR/{tenor}   # 시세 키 (tests/fixtures/market_ust_sample.txt, market-data 레포)
+conventions: UST
+segments:
+  - {type: Bill, tenors: [1M, 2M, 3M, 4M, 6M, 1Y]}            # BEY → 할인채 가격
+  - {type: Bond, tenors: [2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y]}     # par yield = 쿠폰, 가격 100
+interpolation: LogCubicDiscount
+# 시나리오로 흔드는 격자 (제로금리 이동). 격자점 사이 선형, 바깥 평탄
+factor_tenors: [1M, 3M, 6M, 9M, 1Y, 18M, 2Y, 3Y, 4Y, 5Y, 6Y, 7Y, 8Y, 9Y, 10Y, 12Y, 15Y, 20Y, 25Y, 30Y]

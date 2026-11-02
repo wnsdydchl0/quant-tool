@@ -1,0 +1,93 @@
+"""시장: 기초 객체(커브, 나중에 vol 서페이스 …)를 이름으로 한 번에 묶는다.
+
+- 상품 A가 a·b·c, B가 b·c·d를 쓰더라도 b는 한 번만 만들고, 둘 다 market["b"]에 연결된다.
+  그래서 시나리오로 b를 흔들면 A와 B가 같은 b로 함께 움직인다.
+- 시나리오 = {요인 키: 기준 대비 이동}. 요인 키는 "객체 이름/요인 이름" (예: "UST/5Y").
+  apply는 누적되지 않는다 (요인 = 기준 + 이동). reset 또는 with market.scenario(s): 로 되돌린다.
+- roll(d): 시장은 그대로 두고 평가일만 d로 (theta).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from datetime import date
+
+import QuantLib as ql
+
+from .config import Config
+from .curves import BuiltCurve, build_curve, evaluation_date
+from .factors import CurveFactors, MarketObject
+
+
+class Market:
+    def __init__(
+        self,
+        asof: date,
+        objects: Mapping[str, MarketObject],
+        built: Mapping[str, BuiltCurve] | None = None,
+    ) -> None:
+        self.asof = asof
+        self.date = asof
+        self.objects = dict(objects)
+        self.built = dict(built or {})  # 부트스트랩 결과 (진단용)
+        self._base = {k: q.value() for k, q in self.factors().items()}
+        self.current: Mapping[str, float] | None = None
+
+    def __getitem__(self, name: str) -> ql.RelinkableYieldTermStructureHandle:
+        try:
+            return self.objects[name].handle
+        except KeyError:
+            raise KeyError(f"시장에 {name!r}가 없다: {sorted(self.objects)}") from None
+
+    def factors(self) -> dict[str, ql.SimpleQuote]:
+        return {f"{n}/{k}": q for n, o in self.objects.items() for k, q in o.factors().items()}
+
+    def active(self):
+        """평가일을 이 시장의 날짜로 두는 with 블록 (상품 평가는 이 안에서)."""
+        return evaluation_date(self.date)
+
+    # --- 시나리오
+    def apply(self, scenario: Mapping[str, float]) -> None:
+        factors = self.factors()
+        unknown = [k for k in scenario if k not in factors]
+        if unknown:
+            raise KeyError(f"시장에 없는 요인 {unknown[:3]}: {list(factors)[:3]} …")
+        for k, q in factors.items():
+            q.setValue(self._base[k] + scenario.get(k, 0.0))
+        for name in {k.split("/", 1)[0] for k in scenario}:
+            self.objects[name].refresh()
+        self.current = scenario
+
+    def reset(self) -> None:
+        for k, q in self.factors().items():
+            q.setValue(self._base[k])
+        for o in self.objects.values():
+            o.refresh()
+        self.current = None
+
+    @contextmanager
+    def scenario(self, scenario: Mapping[str, float]) -> Iterator[Market]:
+        self.apply(scenario)
+        try:
+            yield self
+        finally:
+            self.reset()
+
+    # --- 시간
+    def roll(self, d: date) -> None:
+        self.date = d
+        for o in self.objects.values():
+            o.roll(d)
+
+
+def build_market(
+    asof: date, quotes: Mapping[str, float], cfg: Config, linked: bool = False
+) -> Market:
+    """그 날의 시세로 설정의 모든 커브를 만들어 시장 하나로 묶는다."""
+    built, objects = {}, {}
+    for name, c in cfg.curves.items():
+        b = build_curve(c, cfg.conventions[c.conventions], quotes, asof, linked)
+        built[name] = b
+        objects[name] = CurveFactors(b.curve, asof, c.factor_tenors)
+    return Market(asof, objects, built)
