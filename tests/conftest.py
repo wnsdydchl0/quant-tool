@@ -19,7 +19,7 @@ def config():
 
 @pytest.fixture
 def quotes():
-    return read_quotes(ROOT / "tests" / "fixtures" / "market_ust_sample.txt")
+    return read_quotes(ROOT / "tests" / "fixtures" / "market_sample.txt")
 
 
 @pytest.fixture

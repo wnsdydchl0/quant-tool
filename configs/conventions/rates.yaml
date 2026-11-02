@@ -7,3 +7,17 @@ UST:
   frequency: Semiannual
   business_day_convention: Unadjusted  # 쿠폰 일정
   payment_convention: Unadjusted       # 수익률 관례: 명목 쿠폰일로 할인 (주말 지급 지연 무시)
+KRW_OIS:                             # KOFR OIS (고정 레그 연간)
+  calendar: SouthKorea.Settlement
+  day_count: Actual365Fixed
+  settlement_days: 1
+  frequency: Annual
+  business_day_convention: ModifiedFollowing
+  payment_convention: ModifiedFollowing
+KRW_IRS:                             # CD91 IRS (고정 레그 분기, Act/365)
+  calendar: SouthKorea.Settlement
+  day_count: Actual365Fixed
+  settlement_days: 1
+  frequency: Quarterly
+  business_day_convention: ModifiedFollowing
+  payment_convention: ModifiedFollowing

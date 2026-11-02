@@ -26,11 +26,13 @@ class Market:
         asof: date,
         objects: Mapping[str, MarketObject],
         built: Mapping[str, BuiltCurve] | None = None,
+        indices: Mapping[str, ql.Index] | None = None,
     ) -> None:
         self.asof = asof
         self.date = asof
         self.objects = dict(objects)
         self.built = dict(built or {})  # 부트스트랩 결과 (진단용)
+        self.indices = dict(indices or {})  # 파생 객체: 예측 커브 Handle에 연결된 지수
         self._base = {k: q.value() for k, q in self.factors().items()}
         self.current: Mapping[str, float] | None = None
 
@@ -39,6 +41,13 @@ class Market:
             return self.objects[name].handle
         except KeyError:
             raise KeyError(f"시장에 {name!r}가 없다: {sorted(self.objects)}") from None
+
+    def index(self, name: str) -> ql.Index:
+        """예측 커브(요인 포함)에 연결된 지수. 커브를 흔들면 지수 선도도 따라 움직인다."""
+        try:
+            return self.indices[name]
+        except KeyError:
+            raise KeyError(f"시장에 지수 {name!r}가 없다: {sorted(self.indices)}") from None
 
     def factors(self) -> dict[str, ql.SimpleQuote]:
         return {f"{n}/{k}": q for n, o in self.objects.items() for k, q in o.factors().items()}
@@ -84,10 +93,19 @@ class Market:
 def build_market(
     asof: date, quotes: Mapping[str, float], cfg: Config, linked: bool = False
 ) -> Market:
-    """그 날의 시세로 설정의 모든 커브를 만들어 시장 하나로 묶는다."""
-    built, objects = {}, {}
-    for name, c in cfg.curves.items():
-        b = build_curve(c, cfg.conventions[c.conventions], quotes, asof, linked)
+    """그 날의 시세로 설정의 모든 커브를 의존 먼저 순서로 만들어 시장 하나로 묶는다.
+
+    다른 커브에 기대는 커브(듀얼 커브의 프로젝션 커브)는 먼저 만든 커브의 시장 Handle(요인 포함)을
+    할인·지수 예측에 쓴다. 지수는 예측 커브 Handle에 연결된 파생 객체다(Market.index).
+    """
+    built, objects, handles = {}, {}, {}
+    for name in cfg.build_order():
+        c = cfg.curves[name]
+        b = build_curve(
+            c, cfg.conventions[c.conventions], quotes, asof, linked, handles, cfg.indices
+        )
         built[name] = b
         objects[name] = CurveFactors(b.curve, asof, c.factor_tenors)
-    return Market(asof, objects, built)
+        handles[name] = objects[name].handle
+    indices = {n: ic.make(n, handles[ic.curve]) for n, ic in cfg.indices.items()}
+    return Market(asof, objects, built, indices)

@@ -86,27 +86,55 @@ class BuiltCurve:
         return {h.key: h.quote for h in self.helpers}
 
 
+@dataclass
+class Context:
+    """헬퍼 함수가 받는 것: 관례, 결제일, 이미 만든 다른 커브, 지수 만들기."""
+
+    curve: str
+    conv: Conventions
+    cal: ql.Calendar
+    settle: ql.Date
+    discount: ql.YieldTermStructureHandle  # Swap 헬퍼 할인 (빈 Handle이면 자기 자신)
+    index: Callable[[str], ql.IborIndex]  # 지수 이름 → QuantLib 지수
+
+
 def build_curve(
-    cfg: CurveConfig, conv: Conventions, quotes: dict[str, float], asof: date, linked: bool = False
+    cfg: CurveConfig,
+    conv: Conventions,
+    quotes: dict[str, float],
+    asof: date,
+    linked: bool = False,
+    curves: dict[str, ql.YieldTermStructureHandle] | None = None,
+    indices: dict | None = None,
 ) -> BuiltCurve:
+    """구간마다 HELPERS[종류]로 헬퍼를 만들고 부트스트랩한다.
+
+    curves: 이미 만든 커브 (할인·다른 지수 예측용, 의존 순서는 Config.build_order).
+    indices: 지수 이름 → IndexConfig. 이 커브가 예측하는 지수는 커브 미연결로 넘긴다
+    (부트스트랩 대상).
+    """
+    curves, indices = curves or {}, indices or {}
+
+    def index(name: str) -> ql.IborIndex:
+        ic = indices[name]
+        return ic.make(name) if ic.curve == cfg.name else ic.make(name, curves[ic.curve])
+
     today = to_ql_date(asof)
     cal = conv.ql_calendar()
     with evaluation_date(asof):  # 헬퍼 결제일 계산이 평가일을 쓴다
-        settle = cal.advance(today, conv.settlement_days, ql.Days)
+        discount = (
+            curves[cfg.discount_curve] if cfg.discount_curve else ql.YieldTermStructureHandle()
+        )
+        ctx = Context(
+            cfg.name, conv, cal, cal.advance(today, conv.settlement_days, ql.Days), discount, index
+        )
         helpers = []
         for seg in cfg.segments:
             for tenor in seg.tenors:
-                key = cfg.quote_key.format(tenor=tenor)
+                key = cfg.key(seg, tenor)
                 if key not in quotes:
                     raise KeyError(f"{cfg.name}: 시세 {key!r}가 {asof}에 없다")
-                q = ql.SimpleQuote(quotes[key])
-                nominal = settle + ql.Period(tenor)
-                if seg.type == "Bill":
-                    helpers.append(
-                        _bill(key, q, settle, cal.adjust(nominal, ql.Following), cal, conv)
-                    )
-                else:  # 정규 일정이 되도록 명목 만기 (par yield에서 가격이 정확히 100)
-                    helpers.append(_bond(key, q, settle, nominal, cal, conv))
+                helpers.append(HELPERS[seg.type](key, ql.SimpleQuote(quotes[key]), tenor, seg, ctx))
         helpers.sort(key=lambda h: h.maturity)
         curve = _CURVES[cfg.interpolation](today, [h.helper for h in helpers], DC)
         curve.enableExtrapolation()
@@ -116,18 +144,22 @@ def build_curve(
     return BuiltCurve(cfg.name, curve, helpers)
 
 
-def _bill(key, q, settle, maturity, cal, conv: Conventions) -> Helper:
+# --- 헬퍼 함수: (시세 키, 시세 Quote, 만기, 구간, Context) → Helper
+def _bill(key, q, tenor, seg, ctx: Context) -> Helper:
+    conv, cal, settle = ctx.conv, ctx.cal, ctx.settle
+    maturity = cal.adjust(settle + ql.Period(tenor), ql.Following)
     days = maturity - settle
     bond = ql.ZeroCouponBond(
         conv.settlement_days, cal, 100.0, maturity, ql.Following, 100.0, settle
     )
     price = ql.DerivedQuote(ql.QuoteHandle(q), lambda y: bill_price(y, days))
-    return Helper(
-        key, q, ql.BondHelper(ql.QuoteHandle(price), bond), maturity, lambda p: bill_yield(p, days)
-    )
+    helper = ql.BondHelper(ql.QuoteHandle(price), bond)
+    return Helper(key, q, helper, maturity, lambda p: bill_yield(p, days))
 
 
-def _bond(key, q, settle, maturity, cal, conv: Conventions) -> Helper:
+def _bond(key, q, tenor, seg, ctx: Context) -> Helper:
+    conv, cal, settle = ctx.conv, ctx.cal, ctx.settle
+    maturity = settle + ql.Period(tenor)  # 정규 일정이 되도록 명목 만기 (par yield에서 가격 100)
     dc, freq, bdc = conv.ql_day_count(), conv.ql_frequency(), conv.ql_bdc()
     sch = ql.Schedule(
         settle, maturity, ql.Period(freq), cal, bdc, bdc, ql.DateGeneration.Backward, False
@@ -141,12 +173,54 @@ def _bond(key, q, settle, maturity, cal, conv: Conventions) -> Helper:
         return bond.cleanPrice(y, dc, ql.Compounded, freq, settle)
 
     def to_yield(p: float) -> float:
-        return bond.bondYield(
-            ql.BondPrice(p, ql.BondPrice.Clean), dc, ql.Compounded, freq, settle, 1e-12, 200
-        )
+        bp = ql.BondPrice(p, ql.BondPrice.Clean)
+        return bond.bondYield(bp, dc, ql.Compounded, freq, settle, 1e-12, 200)
 
     helper = ql.BondHelper(ql.QuoteHandle(ql.DerivedQuote(ql.QuoteHandle(q), price)), bond)
     return Helper(key, q, helper, maturity, to_yield)
+
+
+def _rate_helper(key, q, helper) -> Helper:
+    return Helper(key, q, helper, helper.maturityDate(), lambda r: r)
+
+
+def _deposit(key, q, tenor, seg, ctx: Context) -> Helper:
+    return _rate_helper(key, q, ql.DepositRateHelper(ql.QuoteHandle(q), ctx.index(seg.index)))
+
+
+def _ois(key, q, tenor, seg, ctx: Context) -> Helper:
+    helper = ql.OISRateHelper(
+        ctx.conv.settlement_days,
+        ql.Period(tenor),
+        ql.QuoteHandle(q),
+        ctx.index(seg.index),
+        ctx.discount,
+    )
+    return _rate_helper(key, q, helper)
+
+
+def _swap(key, q, tenor, seg, ctx: Context) -> Helper:
+    """고정 레그는 커브 관례(주기·일수·영업일), 변동 레그는 지수.
+
+    할인은 discount_curve (듀얼 커브).
+    """
+    c = ctx.conv
+    helper = ql.SwapRateHelper(
+        ql.QuoteHandle(q),
+        ql.Period(tenor),
+        ctx.cal,
+        c.ql_frequency(),
+        c.ql_bdc(),
+        c.ql_day_count(),
+        ctx.index(seg.index),
+        ql.QuoteHandle(),
+        ql.Period(0, ql.Days),
+        ctx.discount,
+    )
+    return _rate_helper(key, q, helper)
+
+
+HELPERS = {"Bill": _bill, "Bond": _bond, "Deposit": _deposit, "OIS": _ois, "Swap": _swap}
 
 
 # --- 진단과 표

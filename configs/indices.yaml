@@ -1,0 +1,4 @@
+# 금리 지수. 예측 커브(curve)에 연결된 파생 객체로 만든다 (Market.index).
+KOFR: {type: Overnight, fixing_days: 0, calendar: SouthKorea.Settlement, day_count: Actual365Fixed, currency: KRW, curve: KOFR}
+CD91: {type: Ibor, tenor: 3M, fixing_days: 1, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
+       bdc: ModifiedFollowing, currency: KRW, curve: CD91}

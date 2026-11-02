@@ -91,7 +91,7 @@ from quanttool.scenarios import parallel, from_loadings
 from quanttool.risk import key_rate, scenario_pnl, theta
 
 cfg = load_config("configs")
-quotes = read_quotes("tests/fixtures/market_ust_sample.txt")
+quotes = read_quotes("tests/fixtures/market_sample.txt")
 asof = date(2026, 10, 23)
 
 market = build_market(asof, quotes[asof], cfg)                  # 커브는 한 번, 이름으로
@@ -132,7 +132,7 @@ th = theta(book, market, date(2026, 10, 26))
 ## 7. 현황과 다음 단계
 
 - 시작: `pip install -e ".[dev,notebook]"`, 검사 `python -m pytest -q && ruff check . && ruff format --check .` (pytest는 `python -m`으로).
-- 데이터는 합성 샘플 `tests/fixtures/market_ust_sample.txt`. 실제 데이터는 `../market-data` 연결 전.
+- 데이터는 합성 샘플 `tests/fixtures/market_sample.txt`. 실제 데이터는 `../market-data` 연결 전.
 - 검증 (합성 샘플): 헬퍼 재가격 < 0.01bp, QuantLib 직접 커브·채권과 일치(1e-12), 요인 0 = 부트스트랩 커브(1e-14),
   평행 시나리오 vs `ZeroSpreadedTermStructure` 직접 계산(1e-10), Σ key rate −8,252.07 vs 평행 −8,252.41(2차 항),
   10bp 중심 차분 → 1bp vs 1bp 전진(2e-3), cross gamma = 직접 계산, theta = `ImpliedTermStructure`(1e-9).

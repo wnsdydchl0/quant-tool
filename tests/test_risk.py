@@ -106,7 +106,7 @@ def test_scenario_helpers(market):
     s = combine(parallel(market, "UST", BP), from_loadings("UST", {"2Y": -1.0, "10Y": 1.0}, 5 * BP))
     assert s["UST/2Y"] == pytest.approx(BP - 5 * BP) and s["UST/10Y"] == pytest.approx(BP + 5 * BP)
     b = bucket(market, "UST", ["5Y"], 0, BP)
-    assert len(b) == len(market.factors())  # 이동 만기 하나 = 평행
+    assert len(b) == len(market.objects["UST"].tenors)  # 이동 만기 하나 = 평행
 
 
 def test_theta_is_forward_forward(config, market, book):

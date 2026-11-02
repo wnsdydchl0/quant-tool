@@ -1,0 +1,9 @@
+# CD91 프로젝션 커브: CD 3개월 예금 + CD91 IRS. 스왑 헬퍼 할인은 KOFR (듀얼 커브)
+name: CD91
+conventions: KRW_IRS
+discount_curve: KOFR
+segments:
+  - {type: Deposit, index: CD91, quote_key: "MM/RATE/KRW/CD91/{tenor}", tenors: [3M]}
+  - {type: Swap, index: CD91, quote_key: "IRS/RATE/KRW/CD91/{tenor}", tenors: [1Y, 2Y, 3Y, 5Y, 7Y, 10Y]}
+interpolation: LogLinearDiscount
+factor_tenors: [3M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]

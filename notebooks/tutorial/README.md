@@ -10,6 +10,6 @@
 | `03_scenarios_risk` | 손으로 만든 시나리오·요인 로딩, key rate delta·gamma, 상품별 민감도 규칙, cross gamma |
 | `04_time_history` | theta(ForwardForward), 날짜별 커브 이력, 평가일이 바꾸는 것 |
 
-- 데이터는 `tests/fixtures/market_ust_sample.txt` **합성 샘플**이다. 흐름 이해용이고 숫자로 시장을 해석하지 않는다.
+- 데이터는 `tests/fixtures/market_sample.txt` **합성 샘플**이다. 흐름 이해용이고 숫자로 시장을 해석하지 않는다.
 - 실행 준비: `pip install -e ".[dev,notebook]"`
 - 실제 데이터로 시장을 읽는 노트북은 `notebooks/01_ust_curve.ipynb`.
