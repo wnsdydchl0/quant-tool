@@ -94,3 +94,22 @@ def test_dual_curve_key_rates_separate(config, market, swaps):
     with market.scenario(parallel(market, "CD91", 1e-4)):
         par = swaps.npv() - base
     assert kr_cd["total"].sum() == pytest.approx(par, rel=1e-2)
+
+
+def test_theta_realizes_index_fixing_from_forward(market, swaps):
+    """roll 뒤 지난 fixing(asof)은 오늘의 예측 선도로 채워지고, 되돌리면 지워진다."""
+    from quanttool.risk import theta
+
+    idx = market.index("CD91")
+    fix = to_ql_date(ASOF)
+    with market.active():
+        forward = idx.fixing(fix, True)
+    th = theta(swaps, market, date(2026, 10, 26))
+    assert th.notna().all()
+    assert not idx.hasHistoricalFixing(fix)
+    market.roll(date(2026, 10, 26))
+    try:
+        assert idx.pastFixing(fix) == pytest.approx(forward, abs=1e-15)
+    finally:
+        market.roll(ASOF)
+    assert not idx.hasHistoricalFixing(fix)

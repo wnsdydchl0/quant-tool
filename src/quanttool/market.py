@@ -18,7 +18,7 @@ from datetime import date
 import QuantLib as ql
 
 from .config import Config
-from .curves import BuiltCurve, build_curve, evaluation_date
+from .curves import BuiltCurve, build_curve, evaluation_date, to_ql_date
 from .equity import build_equity, build_heston
 from .factors import CurveFactors, MarketObject
 
@@ -39,6 +39,7 @@ class Market:
         self._order = _dependency_order(self.objects)
         self._base = {k: q.value() for k, q in self.factors().items()}
         self.current: Mapping[str, float] | None = None
+        self._saved: dict[str, tuple[list, list]] = {}  # roll이 채우기 전 지수 이력
 
     def __getitem__(self, name: str):
         """상품이 연결되는 Handle (커브·vol: RelinkableHandle, 현물: QuoteHandle)."""
@@ -94,9 +95,40 @@ class Market:
 
     # --- 시간
     def roll(self, d: date) -> None:
+        """평가일을 d로. [asof, d) 사이 지수 fixing은 오늘 선도로 실현된다고 채운다
+        (ForwardForward). asof로 돌아오면 채운 fixing을 지우고 원래 이력으로 되돌린다."""
+        if self.date != self.asof:
+            self._set_date(self.asof)
+        self._restore_fixings()
+        if d != self.asof:
+            self._realize_fixings(d)
+            self._set_date(d)
+
+    def _set_date(self, d: date) -> None:
         self.date = d
         for name in self._order:
             self.objects[name].roll(d)
+
+    def _realize_fixings(self, d: date) -> None:
+        start, end = to_ql_date(self.asof), to_ql_date(d)
+        self._saved = {}
+        with self.active():
+            for name, idx in self.indices.items():
+                ts = idx.timeSeries()
+                self._saved[name] = (list(ts.dates()), list(ts.values()))
+                x = start
+                while x < end:
+                    if idx.isValidFixingDate(x) and not idx.hasHistoricalFixing(x):
+                        idx.addFixing(x, idx.fixing(x, True))
+                    x += 1
+
+    def _restore_fixings(self) -> None:
+        for name, (dates, values) in self._saved.items():
+            idx = self.indices[name]
+            idx.clearFixings()
+            if dates:
+                idx.addFixings(dates, values)
+        self._saved = {}
 
 
 def _dependency_order(objects: Mapping[str, MarketObject]) -> list[str]:
