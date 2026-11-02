@@ -5,6 +5,8 @@
 - 시나리오 = {요인 키: 기준 대비 이동}. 요인 키는 "객체 이름/요인 이름" (예: "UST/5Y").
   apply는 누적되지 않는다 (요인 = 기준 + 이동). reset 또는 with market.scenario(s): 로 되돌린다.
 - roll(d): 시장은 그대로 두고 평가일만 d로 (theta).
+- 파생 객체(Heston 모델 …)는 depends_on으로 기대는 객체 이름을 밝힌다. 기초 객체가 바뀌면
+  그 뒤에 의존 순서로 refresh된다 (다시 캘리브레이션할지는 객체의 정책).
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ import QuantLib as ql
 
 from .config import Config
 from .curves import BuiltCurve, build_curve, evaluation_date
-from .equity import build_equity
+from .equity import build_equity, build_heston
 from .factors import CurveFactors, MarketObject
 
 
@@ -34,6 +36,7 @@ class Market:
         self.objects = dict(objects)
         self.built = dict(built or {})  # 부트스트랩 결과 (진단용)
         self.indices = dict(indices or {})  # 파생 객체: 예측 커브 Handle에 연결된 지수
+        self._order = _dependency_order(self.objects)
         self._base = {k: q.value() for k, q in self.factors().items()}
         self.current: Mapping[str, float] | None = None
 
@@ -66,15 +69,19 @@ class Market:
             raise KeyError(f"시장에 없는 요인 {unknown[:3]}: {list(factors)[:3]} …")
         for k, q in factors.items():
             q.setValue(self._base[k] + scenario.get(k, 0.0))
-        for name in {k.split("/", 1)[0] for k in scenario}:
-            self.objects[name].refresh()
+        touched = {k.split("/", 1)[0] for k in scenario}
+        for name in self._order:  # 바뀐 객체와 그에 기대는 객체를 의존 먼저 순서로
+            deps = getattr(self.objects[name], "depends_on", [])
+            if name in touched or touched.intersection(deps):
+                touched.add(name)
+                self.objects[name].refresh()
         self.current = scenario
 
     def reset(self) -> None:
         for k, q in self.factors().items():
             q.setValue(self._base[k])
-        for o in self.objects.values():
-            o.refresh()
+        for name in self._order:
+            self.objects[name].refresh()
         self.current = None
 
     @contextmanager
@@ -88,8 +95,26 @@ class Market:
     # --- 시간
     def roll(self, d: date) -> None:
         self.date = d
-        for o in self.objects.values():
-            o.roll(d)
+        for name in self._order:
+            self.objects[name].roll(d)
+
+
+def _dependency_order(objects: Mapping[str, MarketObject]) -> list[str]:
+    """depends_on(파생 객체가 기대는 객체 이름)를 따라 의존 먼저 순서."""
+    order: list[str] = []
+
+    def visit(n: str, path: tuple[str, ...]) -> None:
+        if n in path:
+            raise ValueError("시장 객체 의존 순환: " + " → ".join([*path, n]))
+        if n in order:
+            return
+        for d in getattr(objects[n], "depends_on", []):
+            visit(d, (*path, n))
+        order.append(n)
+
+    for n in objects:
+        visit(n, ())
+    return order
 
 
 def build_market(
@@ -112,4 +137,6 @@ def build_market(
     indices = {n: ic.make(n, handles[ic.curve]) for n, ic in cfg.indices.items()}
     for e in cfg.equities.values():
         objects.update(build_equity(e, quotes, asof))
+        if e.heston:  # 파생 객체: 위 기초 객체에 캘리브레이션
+            objects[e.heston.name] = build_heston(e, objects, asof)
     return Market(asof, objects, built, indices)

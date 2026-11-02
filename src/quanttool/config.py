@@ -211,9 +211,8 @@ class HestonConfig(_Model):
 
     name: str
     init: dict[str, float]  # v0, kappa, theta, sigma, rho 초기값
-    recalibrate: bool = (
-        True  # 기초 객체(spot·vol …)가 바뀌면 다시 캘리브레이션 (아니면 파라미터 고정)
-    )
+    # 이 시장 객체가 바뀌면 다시 캘리브레이션 (비우면 파라미터 고정). 예: [SPX, SPX_VOL]
+    recalibrate_on: list[str] = []
     expiries: list[str] = []  # 비우면 vol 격자 전체
     strikes: list[int] = []
     optimizer: dict[str, float | int] = {}  # max_iterations, root/function/gradient epsilon …
@@ -273,6 +272,9 @@ class Config(_Model):
         for e in self.equities.values():
             if e.discount_curve not in self.curves:
                 raise ValueError(f"{e.name}: 할인 커브 {e.discount_curve!r}가 없다")
+            deps = {e.name, e.discount_curve, f"{e.name}_DIV", f"{e.name}_VOL"}
+            if e.heston and not set(e.heston.recalibrate_on) <= deps:
+                raise ValueError(f"{e.heston.name}: recalibrate_on은 {sorted(deps)} 중에서")
 
     def build_order(self) -> list[str]:
         """의존 먼저 순서 (위상 정렬). 순환이면 오류."""

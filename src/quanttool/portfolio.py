@@ -140,6 +140,7 @@ ENGINES: dict[str, Engine] = {
     "DiscountingBond": lambda t, m, p: ql.DiscountingBondEngine(m[t.curve]),
     "DiscountingSwap": lambda t, m, p: ql.DiscountingSwapEngine(m[t.discount]),
     "AnalyticBS": lambda t, m, p: ql.AnalyticEuropeanEngine(bs_process(t, m)),
+    "AnalyticHeston": lambda t, m, p: ql.AnalyticHestonEngine(m[t.model]),
     "FdBS": lambda t, m, p: ql.FdBlackScholesVanillaEngine(
         bs_process(t, m), int(p["t_grid"]), int(p["x_grid"]), int(p.get("damping_steps", 0))
     ),

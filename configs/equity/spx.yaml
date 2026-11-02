@@ -13,6 +13,6 @@ vol:
 heston:
   name: SPX_HESTON
   init: {v0: 0.04, kappa: 2.0, theta: 0.04, sigma: 0.5, rho: -0.6}
-  recalibrate: true
+  recalibrate_on: [SPX, SPX_VOL]   # 현물·vol이 바뀌면 재캘리브레이션, 금리·배당은 파라미터 고정
   optimizer: {max_iterations: 500, stationary_iterations: 50,
               root_epsilon: 1.0e-8, function_epsilon: 1.0e-8, gradient_epsilon: 1.0e-8}
