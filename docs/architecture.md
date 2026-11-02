@@ -25,7 +25,8 @@ QuantLib으로 다음 흐름을 다룬다.
    - 시나리오는 `{요인: 이동}` 사전이다.
    - 변수 사이 연동(PCA 로딩, spot과 vol을 SSR로 함께 …)은 그 사전을 만드는 **보통 파이썬 함수**로 쓴다.
 3. **포트폴리오: 포지션을 시장에 붙여 가격.**
-   - 포지션은 YAML 한 줄이고, 시장 객체는 이름으로 가리킨다.
+   - 거래 = 상품 템플릿(`configs/products.yaml`: 관례·지수·할인·기초자산) + 거래 값(행사가·만기·수량).
+     코드에서 `trade(cfg, "SPX_EURO", …)`, 파일에서 YAML 한 줄. 시장 객체는 이름으로 가리킨다.
    - 상품 조립과 가격결정 방법(엔진)은 따로다. 엔진은 설정으로 고른다.
      예: 같은 옵션을 BS 해석해 / FD / Heston으로.
 
@@ -57,13 +58,49 @@ configs/
   curves/*.yaml            커브 레시피: UST, KOFR(OIS), CD91(듀얼 커브: KOFR 할인)
   indices.yaml             지수 (KOFR 오버나이트, CD91 3M) → 예측 커브
   equity/spx.yaml          현물·배당·IV 격자 시세 키, Heston 설정(초기값, recalibrate_on, 최적화)
+  products.yaml            상품 템플릿 (UST_NOTE, KRW_IRS_CD91, SPX_EURO)
   pricing.yaml             상품 종류 → 엔진, 엔진 인자 (FD 격자)
   risk.yaml                민감도 이동 크기·방식, 상품별 덮어쓰기, cross gamma 쌍
   estimated/               PCA 로딩 등 추정값 (출처와 함께)
-positions/                 ust_book.yaml, krw_swaps.yaml, spx_options.yaml
+positions/                 예시 북: ust_book.yaml, krw_swaps.yaml, spx_options.yaml
 tests/                     QuantLib 직접 계산·해석해와 비교
 notebooks/                 tutorial/ 00~06, 01_ust_curve
 ```
+
+**configs = 코드를 고치지 않고 동작을 바꾸는 값** (레시피 + 규칙)
+
+| 파일 | 누가 읽나 | 무엇 |
+|---|---|---|
+| `conventions/rates.yaml` | 커브·상품 조립 | 날짜 규칙: 달력, 일수, 결제일, 쿠폰 주기 |
+| `curves/*.yaml`, `indices.yaml`, `equity/*.yaml` | `build_market` | 시장 레시피: 어떤 시세로 어떤 헬퍼, 무엇에 의존, 요인 격자 |
+| `products.yaml` | `Portfolio`, `trade` | 상품 템플릿: 거래마다 같은 특성 |
+| `pricing.yaml` | `Portfolio.build` | 상품별 가격결정 방법, 엔진 인자 |
+| `risk.yaml` | `analysis/risk.py` | 그릭 정의: 이동 크기·방식, 상품별 덮어쓰기 |
+| `estimated/` | 시나리오 함수 | 추정값 (출처 필수) |
+
+**positions = 예시 북.** 실험·민감도 분석에서는 코드에서 `trade()`로 거래를 만드는 경우가 더 많다.
+백테스트는 초기 북을 파일에서 읽고, 헷지 거래는 루프가 만든다.
+실시간 체결·잔고(OMS, 브로커)는 이 툴 **바깥**이다. 바깥 어댑터가 같은 레코드 모양(`{product, …}`)을 넘기면 된다
+(`market-data`와 같은 위치). 이 툴은 "포지션 + 시장 → 가격·그릭·헷지 권고" 계산기로 둔다.
+
+**흐름 한 장**
+
+```
+quotes + configs ─► build_market ─► Market (이름 → 시장 객체, 지수)
+                    (의존 순서로 build_curve·build_equity·모델)        │
+positions / trade() ─► Portfolio.build(market) ─────────────────────────┘ 이름으로 연결
+analysis/scenarios: {요인: 이동} ─► market.scenario(s) ─► book.npvs() ─► analysis/risk: 반복·차분·환산·표
+```
+
+시나리오 하나는 `with market.scenario(s): book.npvs() - base` 세 줄이면 된다. risk는 그것을 여러 번 돌리는 규칙
+(위·아래, 만기마다, 상품별 크기·방식, 1bp 환산)이다. 즉 "어떻게 흔들어 몇으로 부를지" = 그릭 정의가 사는 곳이다.
+
+**시간과 평가일**
+- 커브는 오늘 시세로 **얼린다**: 기준일이 asof에 고정이고, 시세가 바뀌어도 다시 부트스트랩하지 않는다(`linked=True` 제외).
+- QuantLib 전역 평가일은 결제일·경과이자·지난 현금흐름·과거 fixing을 정한다. `market.active()`가 그것을 시장 날짜로 잠시 둔다.
+- `market.roll(d)`: 오늘 시장의 선도가 d의 시장이 된다(ForwardForward). 커브 `ImpliedTermStructure`, vol 선도 분산,
+  지난 fixing = 오늘 선도, Heston 재캘리브레이션. 그래서 theta ≈ carry이고 roll-down은 빠진다(검증: UST 북 theta = NPV × 3일 단기금리).
+  roll-down이 필요하면 "만기별 제로 그대로" 방식을 `CurveFactors.roll`에 추가한다.
 
 ## 3. 객체 가이드
 
@@ -117,7 +154,11 @@ notebooks/                 tutorial/ 00~06, 01_ust_curve
 - 도구: `bill_price`, `bill_yield`, `evaluation_date(d)`
 
 **`Portfolio`** (`portfolio.py`)
-- 만들기: `Portfolio.from_file("positions/ust_book.yaml", …)`
+- 만들기
+  - 파일: `Portfolio.from_file("positions/ust_book.yaml", …, products=cfg.products)`
+  - 레코드: `Portfolio.from_records([{"id": …, "product": "KRW_IRS_CD91", …}], cfg.products)`
+  - 코드: `Portfolio([trade(cfg, "SPX_EURO", id="c1", option_type="Call", strike=6000, expiry=…, quantity=10)])`
+  - 템플릿 위에 거래 값을 덮는다. 템플릿 없이 모든 필드를 직접 써도 된다.
 - `.build(market, cfg)`: 거래마다 `BUILDERS[type]`으로 상품을 만들고, 엔진을 고른다.
   - 엔진: 거래의 `engine` 필드 → 없으면 `pricing.yaml products[type]`
   - 엔진 공유: 같은 (엔진, 시장 객체들) 조합은 엔진 하나를 공유한다.
@@ -186,14 +227,17 @@ th = theta(book, market, date(2026, 10, 26))
 |---|---|
 | 커브 추가 (KRW 국채, SOFR) | `configs/curves/*.yaml`(+ 지수면 `indices.yaml`). 새 헬퍼 종류면 `curves.HELPERS`에 함수 하나 |
 | 다른 주식·지수 | `configs/equity/*.yaml` 하나 (시세 키, 격자, Heston 설정) |
-| 피팅 vol 서페이스 (SVI·SABR) | `equity.py`에 `MarketObject`를 맞춘 클래스. 요인 = 파라미터 Quote, `refresh()`에서 서페이스를 다시 만들어 handle에 연결 |
+| 피팅 vol 서페이스 (SVI·SABR) | `market/equity.py`에 `MarketObject`를 맞춘 클래스. 요인 = 파라미터 Quote, `refresh()`에서 서페이스를 다시 만들어 handle에 연결 |
 | 다른 모델 (local vol, SABR 모델) | `HestonModelObject`처럼 `depends_on` + `refresh`(캘리브레이션 정책). 시장이 의존 순서로 부른다 |
-| 상품 추가 | `portfolio.py`의 `TRADES`·`BUILDERS`에 명세·조립 함수. `market_names()`, `multiplier()` |
+| 상품 추가 | `portfolio.py`의 `TRADES`·`BUILDERS`에 명세·조립 함수(`market_names()`, `multiplier()`), 자주 쓰면 `products.yaml`에 템플릿 |
 | 엔진 추가·교체 | `ENGINES`에 람다 한 줄, `pricing.yaml products`에서 기본으로 고르거나 거래의 `engine` 필드. 인자는 `pricing.yaml engines` |
-| 연동 규칙 (SSR, PCA, 상관 충격) | `scenarios.py`에 시나리오 함수. 여러 객체의 요인을 한 사전에 함께 |
-| 그릭 계산 규칙 수정 | `risk.yaml`의 `overrides`, `factor_delta`에 규칙 함수, 또는 `risk.py`에 계산 함수 |
-| par 민감도 (헷지 수량), 헷지 백테스트 | `risk.py`에 함수 (날짜별 `build_market` + 민감도 + 다음 날 재평가) |
-| 실제 데이터 | `quotes.py`에 DB 읽기 함수 (같은 `{날짜: {키: 값}}` 모양). 데이터는 `../market-data` 레포 |
+| 연동 규칙 (SSR, PCA, 상관 충격) | `analysis/scenarios.py`에 시나리오 함수. 여러 객체의 요인을 한 사전에 함께 |
+| 그릭 계산 규칙 수정 | `risk.yaml`의 `overrides`, `factor_delta`에 규칙 함수, 또는 `analysis/risk.py`에 계산 함수 |
+| par 민감도 (헷지 수량) | `analysis/risk.py`에 함수 |
+| 헷지 백테스트 | `analysis/backtest.py`: 날짜마다 `build_market` → 북 + 헷지 거래(`trade`) → 수정 그릭으로 헷지 수량 → 다음 날 시장에서 재평가 → 손익 |
+| roll-down theta | `CurveFactors.roll`에 "만기별 제로 그대로" 방식 |
+| 실시간 포지션 | 바깥 OMS 어댑터 `read_positions()` → 같은 레코드 모양 → `Portfolio.from_records(…, cfg.products)` |
+| 실제 데이터 | `market/quotes.py`에 DB 읽기 함수 (같은 `{날짜: {키: 값}}` 모양). 데이터는 `../market-data` 레포 |
 
 ## 6. 결정 사항
 
@@ -228,7 +272,7 @@ th = theta(book, market, date(2026, 10, 26))
   - 시세: UST, KRW KOFR OIS·CD91 IRS, SPX
   - SPX IV는 알려진 Heston 파라미터 가격에서 역산했다.
   - 실제 데이터는 `../market-data` 연결 전이다.
-- 검증 (합성 샘플, 63개 테스트)
+- 검증 (합성 샘플, 66개 테스트)
   - 금리
     - 헬퍼 재가격 < 0.01bp, QuantLib 직접 커브·채권과 일치(1e-12)
     - 요인 0 = 부트스트랩 커브(1e-14)
