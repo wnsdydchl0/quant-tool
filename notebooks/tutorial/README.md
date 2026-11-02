@@ -9,6 +9,8 @@
 | `02_portfolio` | 포지션 YAML → QuantLib 채권 → NPV, 직접 계산과 비교, 다른 날짜 시장에 다시 붙이기 |
 | `03_scenarios_risk` | 손으로 만든 시나리오·요인 로딩, key rate delta·gamma, 상품별 민감도 규칙, cross gamma |
 | `04_time_history` | theta(ForwardForward), 날짜별 커브 이력, 평가일이 바꾸는 것 |
+| `05_dual_curve` | KOFR 할인 + CD91 예측 듀얼 커브, 조립 순서, 지수(파생 객체), IRS, 할인·예측 key rate |
+| `06_equity_options` | 현물·배당·IV 서페이스, 같은 옵션을 BS/FD/Heston 엔진으로, Heston 캘리브레이션·재캘리브레이션 정책, SSR delta, theta |
 
 - 데이터는 `tests/fixtures/market_sample.txt` **합성 샘플**이다. 흐름 이해용이고 숫자로 시장을 해석하지 않는다.
 - 실행 준비: `pip install -e ".[dev,notebook]"`
