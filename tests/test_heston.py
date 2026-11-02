@@ -1,5 +1,4 @@
 from datetime import date
-from pathlib import Path
 
 import pytest
 import QuantLib as ql
@@ -9,15 +8,14 @@ from quanttool.market.curves import to_ql_date
 from quanttool.market.equity import HESTON_PARAMS
 from quanttool.portfolio import Portfolio
 
-ROOT = Path(__file__).resolve().parents[1]
 ASOF = date(2026, 10, 23)
 TRUE = {"theta": 0.045, "kappa": 1.8, "sigma": 0.6, "rho": -0.7, "v0": 0.033}  # 시세 생성 값
 VOL_KEYS = lambda m: [k for k in m.factors() if k.startswith("SPX_VOL/")]  # noqa: E731
 
 
 @pytest.fixture
-def heston_book(config, market):
-    recs = Portfolio.from_file(ROOT / "positions" / "spx_options.yaml").trades.values()
+def heston_book(config, market, load):
+    recs = load("spx_options").trades.values()
     rows = [{**t.model_dump(), "engine": "AnalyticHeston", "model": "SPX_HESTON"} for t in recs]
     return Portfolio.from_records(rows).build(market, config)
 
@@ -55,8 +53,8 @@ def test_analytic_heston_matches_direct(market, quotes, heston_book):
     assert list(heston_book.engines)[0][0] == "AnalyticHeston"
 
 
-def test_heston_close_to_bs_on_its_own_surface(heston_book, config, market):
-    bs = Portfolio.from_file(ROOT / "positions" / "spx_options.yaml").build(market, config)
+def test_heston_close_to_bs_on_its_own_surface(heston_book, config, market, load):
+    bs = load("spx_options").build(market, config)
     assert heston_book.npvs().to_numpy() == pytest.approx(bs.npvs().to_numpy(), rel=1e-2)
 
 

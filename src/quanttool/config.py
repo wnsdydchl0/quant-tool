@@ -4,6 +4,7 @@ configs/
   conventions/rates.yaml   관례 이름 → 결제일·일수·쿠폰 주기 …
   curves/*.yaml            커브 하나의 레시피 (시세 키, 헬퍼 구간, 보간, 요인 격자)
   equity/*.yaml            주식 하나: 현물·배당·IV 격자 시세 키, Heston 모델 설정
+  products.yaml            상품 템플릿: 거래마다 같은 특성(관례·지수·할인·기초자산 …)
   pricing.yaml             상품 종류 → 엔진, 엔진 인자
   risk.yaml                민감도 이동 크기·방식, 상품별 덮어쓰기, cross gamma 쌍
 """
@@ -252,6 +253,7 @@ class Config(_Model):
     indices: dict[str, IndexConfig] = {}
     pricing: PricingConfig = PricingConfig()
     equities: dict[str, EquityConfig] = {}
+    products: dict[str, dict] = {}  # 상품 템플릿 이름 → {type, 기본 필드} (portfolio.expand)
     risk: RiskConfig = RiskConfig()
 
     def model_post_init(self, _ctx) -> None:
@@ -326,6 +328,7 @@ def load_config(root: str | Path = "configs") -> Config:
             "indices": optional("indices.yaml"),
             "pricing": optional("pricing.yaml"),
             "equities": equities,
+            "products": optional("products.yaml"),
             "risk": optional("risk.yaml"),
         }
     )

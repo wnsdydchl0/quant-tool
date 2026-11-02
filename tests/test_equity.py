@@ -1,5 +1,4 @@
 from datetime import date
-from pathlib import Path
 
 import pytest
 import QuantLib as ql
@@ -7,7 +6,6 @@ import QuantLib as ql
 from quanttool.market.curves import to_ql_date
 from quanttool.portfolio import Portfolio
 
-ROOT = Path(__file__).resolve().parents[1]
 ASOF = date(2026, 10, 23)
 NYSE = ql.UnitedStates(ql.UnitedStates.NYSE)
 DC = ql.Actual365Fixed()
@@ -16,8 +14,8 @@ STRIKES = [80, 90, 100, 110, 120]
 
 
 @pytest.fixture
-def options(config, market):
-    return Portfolio.from_file(ROOT / "positions" / "spx_options.yaml").build(market, config)
+def options(config, market, load):
+    return load("spx_options").build(market, config)
 
 
 def _direct_surface(q):
@@ -85,11 +83,11 @@ def test_analytic_bs_matches_direct(market, quotes, options):
             assert npv[i] == pytest.approx(opt.NPV() * t.quantity, rel=1e-13)
 
 
-def test_fd_engine_close_to_analytic(config, market):
-    recs = Portfolio.from_file(ROOT / "positions" / "spx_options.yaml").trades.values()
+def test_fd_engine_close_to_analytic(config, market, load):
+    recs = load("spx_options").trades.values()
     fd = Portfolio.from_records([{**t.model_dump(), "engine": "FdBS"} for t in recs])
     fd.build(market, config)
-    analytic = Portfolio.from_file(ROOT / "positions" / "spx_options.yaml").build(market, config)
+    analytic = load("spx_options").build(market, config)
     assert list(fd.engines)[0][0] == "FdBS"
     assert fd.npvs().to_numpy() == pytest.approx(analytic.npvs().to_numpy(), rel=1e-3)
 

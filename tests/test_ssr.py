@@ -1,19 +1,15 @@
 import math
-from pathlib import Path
 
 import pytest
 
 from quanttool.analysis.risk import factor_delta
 from quanttool.analysis.scenarios import ssr
 from quanttool.market.curves import to_ql_date
-from quanttool.portfolio import Portfolio
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
-def options(config, market):
-    return Portfolio.from_file(ROOT / "positions" / "spx_options.yaml").build(market, config)
+def options(config, market, load):
+    return load("spx_options").build(market, config)
 
 
 def _vol_keys(market):

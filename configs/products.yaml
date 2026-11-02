@@ -1,0 +1,17 @@
+# 상품 템플릿: 거래마다 같은 특성. 거래는 템플릿 이름(product)과 거래 값(행사가·만기·수량 …)만 준다.
+# 거래 쪽 값이 템플릿을 덮는다. 필드는 portfolio.py의 명세 클래스(Bond, IRSwap, EquityOption) 그대로.
+UST_NOTE:          # 미 국채 (쿠폰·발행일·만기·액면은 거래 값)
+  type: Bond
+  conventions: UST
+  curve: UST
+KRW_IRS_CD91:      # CD91 vs 고정, 고정 레그 분기 Act/365, KOFR 할인
+  type: IRSwap
+  conventions: KRW_IRS
+  index: CD91
+  discount: KOFR
+SPX_EURO:          # S&P 500 유럽형 옵션 (지수 단위)
+  type: EquityOption
+  underlying: SPX
+  curve: UST
+  dividend: SPX_DIV
+  vol: SPX_VOL

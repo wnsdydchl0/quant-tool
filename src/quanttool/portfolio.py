@@ -1,4 +1,8 @@
-"""포트폴리오: 포지션 명세(YAML) → QuantLib 상품 + 엔진, 시장의 이름 붙은 객체로 가격.
+"""포트폴리오: 거래 명세 → QuantLib 상품 + 엔진, 시장의 이름 붙은 객체로 가격.
+
+- 거래 = 상품 템플릿(configs/products.yaml: 관례·지수·할인·기초자산처럼 거래마다 같은 값)
+  + 거래 값(행사가·만기·수량 …). 코드에서는 trade(cfg, "SPX_EURO", strike=…, …),
+  파일에서는 {product: SPX_EURO, strike: …}. 템플릿 없이 모든 필드를 직접 써도 된다.
 
 - 거래는 시장 객체를 이름으로 가리킨다 (curve: UST, discount: KOFR, index: CD91 …).
 - 상품 종류마다 명세(TRADES)와 조립 함수(BUILDERS) 하나. 조립 함수는 상품만 만들고 엔진은 모른다.
@@ -9,7 +13,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from datetime import date
 from pathlib import Path
 from typing import Literal
@@ -28,6 +32,7 @@ class Trade(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: str
+    product: str = ""  # 상품 템플릿 이름 (있으면)
     engine: str = ""  # 비우면 configs/pricing.yaml의 상품 종류 기본값
 
     def market_names(self) -> tuple[str, ...]:
@@ -146,6 +151,31 @@ ENGINES: dict[str, Engine] = {
     ),
 }
 
+
+def expand(record: Mapping, products: Mapping[str, Mapping] | None) -> dict:
+    """상품 템플릿 위에 거래 값을 덮는다. product가 없거나 products를 안 넘기면 그대로
+    (이미 펼친 레코드, 예: trade.model_dump())."""
+    name = record.get("product")
+    if not name or products is None:
+        return dict(record)
+    if name not in products:
+        raise KeyError(f"상품 템플릿 {name!r}가 없다 (configs/products.yaml): {sorted(products)}")
+    return {**products[name], **record}
+
+
+def make_trade(record: Mapping, products: Mapping[str, Mapping] | None = None) -> Trade:
+    r = expand(record, products)
+    kind = r.get("type", "Bond")
+    if kind not in TRADES:
+        raise KeyError(f"{r.get('id')}: 상품 종류 {kind!r}가 없다: {sorted(TRADES)}")
+    return TRADES[kind].model_validate(r)
+
+
+def trade(cfg: Config, product: str, **fields) -> Trade:
+    """코드에서 거래 하나: trade(cfg, "SPX_EURO", id="c1", option_type="Call", strike=6000, …)."""
+    return make_trade({"product": product, **fields}, cfg.products)
+
+
 TRADES = {"Bond": Bond, "IRSwap": IRSwap, "EquityOption": EquityOption}
 BUILDERS = {"Bond": build_bond, "IRSwap": build_irswap, "EquityOption": build_equity_option}
 
@@ -169,16 +199,21 @@ class Portfolio:
         self.market: Market | None = None
 
     @classmethod
-    def from_records(cls, records: Iterable[dict]) -> Portfolio:
-        return cls(TRADES[r.get("type", "Bond")].model_validate(r) for r in records)
+    def from_records(
+        cls, records: Iterable[Mapping], products: Mapping[str, Mapping] | None = None
+    ) -> Portfolio:
+        """레코드(dict) → 거래. product 필드가 있으면 products(보통 cfg.products) 템플릿을 쓴다."""
+        return cls(make_trade(r, products) for r in records)
 
     @classmethod
-    def from_file(cls, *paths: str | Path) -> Portfolio:
+    def from_file(
+        cls, *paths: str | Path, products: Mapping[str, Mapping] | None = None
+    ) -> Portfolio:
         records = []
         for path in paths:
             with Path(path).open(encoding="utf-8") as f:
                 records += yaml.safe_load(f) or []
-        return cls.from_records(records)
+        return cls.from_records(records, products)
 
     def ids(self) -> list[str]:
         return list(self.trades)

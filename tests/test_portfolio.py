@@ -5,7 +5,7 @@ import QuantLib as ql
 
 from quanttool.market import build_market
 from quanttool.market.curves import to_ql_date
-from quanttool.portfolio import Portfolio
+from quanttool.portfolio import Portfolio, trade
 
 ASOF = date(2026, 10, 23)
 
@@ -84,3 +84,41 @@ def test_errors(config, market):
         Portfolio.from_records([rec]).npvs()
     with pytest.raises(KeyError, match="KRW"):
         Portfolio.from_records([{**rec, "curve": "KRW"}]).build(market, config)
+
+
+def test_product_template_equals_explicit_record(config, market):
+    """템플릿 + 거래 값 = 모든 필드를 직접 쓴 레코드 (같은 명세, 같은 NPV)."""
+    explicit = {"id": "N", "notional": 1e7, "coupon": 0.04, "issue_date": "2026-08-15",
+                "maturity_date": "2036-08-15", "conventions": "UST", "curve": "UST"}  # fmt: skip
+    t = trade(
+        config,
+        "UST_NOTE",
+        **{k: v for k, v in explicit.items() if k not in ("conventions", "curve")},
+    )
+    assert t.product == "UST_NOTE" and t.conventions == "UST" and t.curve == "UST"
+    a = Portfolio([t]).build(market, config)
+    b = Portfolio.from_records([explicit]).build(market, config)
+    assert a.npv() == pytest.approx(b.npv(), rel=1e-15)
+
+
+def test_record_overrides_template_and_unknown_template(config, market):
+    rec = {"id": "c", "product": "SPX_EURO", "quantity": 1, "option_type": "Call",
+           "strike": 6000, "expiry": "2027-10-22", "vol": "OTHER_VOL"}  # fmt: skip
+    t = Portfolio.from_records([rec], config.products).trades["c"]
+    assert t.vol == "OTHER_VOL" and t.dividend == "SPX_DIV"
+    with pytest.raises(KeyError, match="템플릿"):
+        Portfolio.from_records([{**rec, "product": "NOPE"}], config.products)
+
+
+def test_trades_from_code_reproduce_position_file(config, market, load):
+    file_book = load("spx_options")
+    code_book = Portfolio([
+        trade(config, "SPX_EURO", id="SPX_1Y_C100", quantity=10, option_type="Call", strike=6000,
+              expiry=date(2027, 10, 22)),
+        trade(config, "SPX_EURO", id="SPX_6M_P90", quantity=-20, option_type="Put", strike=5400,
+              expiry=date(2027, 4, 23)),
+    ])  # fmt: skip
+    assert code_book.trades == file_book.trades
+    assert code_book.build(market, config).npv() == pytest.approx(
+        file_book.build(market, config).npv(), rel=1e-15
+    )

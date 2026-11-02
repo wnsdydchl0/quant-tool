@@ -1,5 +1,4 @@
 from datetime import date
-from pathlib import Path
 
 import pytest
 import QuantLib as ql
@@ -10,7 +9,6 @@ from quanttool.analysis.scenarios import parallel
 from quanttool.market.curves import to_ql_date
 from quanttool.portfolio import Portfolio
 
-ROOT = Path(__file__).resolve().parents[1]
 ASOF = date(2026, 10, 23)
 CAL = ql.SouthKorea(ql.SouthKorea.Settlement)
 
@@ -29,8 +27,8 @@ def _par_swap(rate, years, pay_fixed=True, **kw):
 
 
 @pytest.fixture
-def swaps(config, market):
-    return Portfolio.from_file(ROOT / "positions" / "krw_swaps.yaml").build(market, config)
+def swaps(config, market, load):
+    return load("krw_swaps").build(market, config)
 
 
 @pytest.mark.parametrize("years", [2, 5, 10])
