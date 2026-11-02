@@ -4,13 +4,14 @@
   값은 보고 단위(risk.shift_size, 1bp) 이동당 손익.
 - 상품별 규칙: risk.overrides[거래 id 또는 상품 종류] = {shift_size, scheme}.
   예를 들어 수치 엔진 상품은 10bp 중심 차분으로 계산하고 1bp 기준으로 다시 환산한다.
+- factor_delta: 아무 요인 또는 규칙 함수(SSR 등)의 delta·gamma.
 - cross_gamma: 요인 쌍을 함께 이동.
 - scenario_pnl: 시나리오 여러 개의 거래별 손익. theta: 시장 그대로, 날짜만 이동.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date
 
 import pandas as pd
@@ -53,6 +54,35 @@ def key_rate(
             delta.loc[tenor, ids] = ((up - down) / 2 if scheme == "Central" else up - b) * scale
             if risk.compute_gamma:
                 gamma.loc[tenor, ids] = (up - 2 * b + down) * scale**2
+    for table in (delta, gamma):
+        table["total"] = table.sum(axis=1)
+    return {"delta": delta, "gamma": gamma}
+
+
+def factor_delta(
+    portfolio: Portfolio,
+    market: Market,
+    moves: Mapping[str, str | Callable[[float], Mapping[str, float]]],
+    size: float,
+    scheme: str = "Central",
+) -> dict[str, pd.DataFrame]:
+    """아무 요인·규칙의 delta·gamma. {"delta": 이동 이름 × 거래, "gamma": …} (size 이동당 손익).
+
+    moves의 값은 요인 키 하나("SPX/spot", "SPX_HESTON/v0") 또는 크기 h → 시나리오 함수
+    (예: lambda h: ssr(market, "SPX", "SPX_VOL", h, 0.0)). 아래 방향은 함수에 −h를 넣는다
+    (비선형 규칙도 그대로).
+    """
+    base = portfolio.npvs()
+    delta = pd.DataFrame(0.0, index=pd.Index(list(moves), name="move"), columns=portfolio.ids())
+    gamma = delta.copy()
+    for name, m in moves.items():
+        make = (lambda h, k=m: {k: h}) if isinstance(m, str) else m
+        with market.scenario(make(size)):
+            up = portfolio.npvs()
+        with market.scenario(make(-size)):
+            down = portfolio.npvs()
+        delta.loc[name] = (up - down) / 2 if scheme == "Central" else up - base
+        gamma.loc[name] = up - 2 * base + down
     for table in (delta, gamma):
         table["total"] = table.sum(axis=1)
     return {"delta": delta, "gamma": gamma}
