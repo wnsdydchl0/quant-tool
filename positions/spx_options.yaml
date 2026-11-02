@@ -1,0 +1,5 @@
+# 예시 SPX 옵션 (수량 = 지수 단위 계약 수). 할인 UST, 배당 SPX_DIV, vol SPX_VOL.
+- {id: SPX_1Y_C100, type: EquityOption, quantity: 10, option_type: Call, strike: 6000, expiry: 2027-10-22,
+   underlying: SPX, curve: UST, dividend: SPX_DIV, vol: SPX_VOL}
+- {id: SPX_6M_P90, type: EquityOption, quantity: -20, option_type: Put, strike: 5400, expiry: 2027-04-23,
+   underlying: SPX, curve: UST, dividend: SPX_DIV, vol: SPX_VOL}

@@ -7,9 +7,8 @@
                          (Observer로 따라오면 할 일 없음)
     roll(d)              평가일을 d로 옮길 때 기준 구조물을 굴린다
 
-지금은 커브(CurveFactors) 하나다. vol 서페이스는 같은 규격으로 두 방식을 넣을 수 있다:
-  - 격자 vol 이동: 요인 = 격자 vol Quote
-  - 피팅 파라미터 이동: 요인 = SVI·SABR 파라미터, refresh가 서페이스를 다시 만들어 연결
+구현: CurveFactors(여기, 금리·배당 커브), equity.py의 EquitySpot·VolSurface(격자 vol 이동).
+피팅 파라미터 방식(SVI·SABR)은 요인 = 파라미터 Quote, refresh가 서페이스를 다시 만들어 연결.
 """
 
 from __future__ import annotations
@@ -25,7 +24,7 @@ _FAR = "100Y"  # 마지막 격자점 뒤 평탄 외삽 끝점
 
 
 class MarketObject(Protocol):
-    handle: ql.RelinkableYieldTermStructureHandle
+    handle: object  # 커브·vol: RelinkableHandle, 현물: QuoteHandle
 
     def factors(self) -> dict[str, ql.SimpleQuote]: ...
 

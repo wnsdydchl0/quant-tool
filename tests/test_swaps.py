@@ -63,10 +63,10 @@ def test_swap_matches_direct_quantlib(config, market, swaps):
 
 def test_engine_from_pricing_config_and_override(config, market, monkeypatch):
     """pricing.yaml이 기본 엔진을 고르고, 거래의 engine 필드가 덮어쓴다."""
-    assert config.pricing == {"Bond": "DiscountingBond", "IRSwap": "DiscountingSwap"}
+    assert config.pricing.products["IRSwap"] == "DiscountingSwap"
     # 같은 스왑을 CD91로 할인하는 엔진 (예: 단일 커브 비교)
     monkeypatch.setitem(pf.ENGINES, "SingleCurveSwap",
-                        lambda t, m: ql.DiscountingSwapEngine(m[t.index]))  # fmt: skip
+                        lambda t, m, p: ql.DiscountingSwapEngine(m[t.index]))  # fmt: skip
     rec = _par_swap(0.03, 10)
     book = Portfolio.from_records([rec, {**rec, "id": "single", "engine": "SingleCurveSwap"}])
     book.build(market, config)

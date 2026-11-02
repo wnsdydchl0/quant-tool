@@ -1,4 +1,4 @@
-"""시장: 기초 객체(커브, 나중에 vol 서페이스 …)를 이름으로 한 번에 묶는다.
+"""시장: 기초 객체(커브, 주식 현물·배당·vol 서페이스 …)를 이름으로 한 번에 묶는다.
 
 - 상품 A가 a·b·c, B가 b·c·d를 쓰더라도 b는 한 번만 만들고, 둘 다 market["b"]에 연결된다.
   그래서 시나리오로 b를 흔들면 A와 B가 같은 b로 함께 움직인다.
@@ -17,6 +17,7 @@ import QuantLib as ql
 
 from .config import Config
 from .curves import BuiltCurve, build_curve, evaluation_date
+from .equity import build_equity
 from .factors import CurveFactors, MarketObject
 
 
@@ -36,7 +37,8 @@ class Market:
         self._base = {k: q.value() for k, q in self.factors().items()}
         self.current: Mapping[str, float] | None = None
 
-    def __getitem__(self, name: str) -> ql.RelinkableYieldTermStructureHandle:
+    def __getitem__(self, name: str):
+        """상품이 연결되는 Handle (커브·vol: RelinkableHandle, 현물: QuoteHandle)."""
         try:
             return self.objects[name].handle
         except KeyError:
@@ -108,4 +110,6 @@ def build_market(
         objects[name] = CurveFactors(b.curve, asof, c.factor_tenors)
         handles[name] = objects[name].handle
     indices = {n: ic.make(n, handles[ic.curve]) for n, ic in cfg.indices.items()}
+    for e in cfg.equities.values():
+        objects.update(build_equity(e, quotes, asof))
     return Market(asof, objects, built, indices)

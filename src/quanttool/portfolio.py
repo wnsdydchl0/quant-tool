@@ -101,18 +101,56 @@ def build_irswap(t: IRSwap, market: Market, cfg: Config) -> ql.VanillaSwap:
                           index, t.spread, index.dayCounter())  # fmt: skip
 
 
-# --- 엔진: 이름 → (거래, 시장) → QuantLib 엔진
-ENGINES: dict[str, Callable[[Trade, Market], ql.PricingEngine]] = {
-    "DiscountingBond": lambda t, m: ql.DiscountingBondEngine(m[t.curve]),
-    "DiscountingSwap": lambda t, m: ql.DiscountingSwapEngine(m[t.discount]),
+# --- 주식 옵션 (유럽형)
+class EquityOption(Trade):
+    """유럽형 콜·풋. quantity < 0이면 매도. 시장 객체: 현물, 할인 커브, 배당 커브, vol (, 모델)."""
+
+    type: Literal["EquityOption"] = "EquityOption"
+    quantity: float
+    option_type: Literal["Call", "Put"]
+    strike: float
+    expiry: date
+    underlying: str  # 현물 (예: SPX)
+    curve: str  # 할인
+    dividend: str  # 예: SPX_DIV
+    vol: str  # 예: SPX_VOL
+    model: str = ""  # Heston 엔진이 쓰는 모델 객체 (예: SPX_HESTON)
+
+    def market_names(self):
+        return (self.underlying, self.curve, self.dividend, self.vol, self.model)
+
+    def multiplier(self) -> float:
+        return self.quantity
+
+
+def build_equity_option(t: EquityOption, market: Market, cfg: Config) -> ql.VanillaOption:
+    kind = ql.Option.Call if t.option_type == "Call" else ql.Option.Put
+    return ql.VanillaOption(ql.PlainVanillaPayoff(kind, t.strike),
+                            ql.EuropeanExercise(to_ql_date(t.expiry)))  # fmt: skip
+
+
+def bs_process(t: EquityOption, m: Market) -> ql.GeneralizedBlackScholesProcess:
+    """현물 + 배당 + 할인 + vol 서페이스 Handle. 요인을 흔들면 프로세스가 따라온다."""
+    return ql.GeneralizedBlackScholesProcess(m[t.underlying], m[t.dividend], m[t.curve], m[t.vol])
+
+
+# --- 엔진: 이름 → (거래, 시장, 엔진 인자) → QuantLib 엔진. 인자는 pricing.yaml engines
+Engine = Callable[[Trade, Market, dict], ql.PricingEngine]
+ENGINES: dict[str, Engine] = {
+    "DiscountingBond": lambda t, m, p: ql.DiscountingBondEngine(m[t.curve]),
+    "DiscountingSwap": lambda t, m, p: ql.DiscountingSwapEngine(m[t.discount]),
+    "AnalyticBS": lambda t, m, p: ql.AnalyticEuropeanEngine(bs_process(t, m)),
+    "FdBS": lambda t, m, p: ql.FdBlackScholesVanillaEngine(
+        bs_process(t, m), int(p["t_grid"]), int(p["x_grid"]), int(p.get("damping_steps", 0))
+    ),
 }
 
-TRADES = {"Bond": Bond, "IRSwap": IRSwap}
-BUILDERS = {"Bond": build_bond, "IRSwap": build_irswap}
+TRADES = {"Bond": Bond, "IRSwap": IRSwap, "EquityOption": EquityOption}
+BUILDERS = {"Bond": build_bond, "IRSwap": build_irswap, "EquityOption": build_equity_option}
 
 
 def engine_name(t: Trade, cfg: Config) -> str:
-    name = t.engine or cfg.pricing.get(t.type, "")
+    name = t.engine or cfg.pricing.products.get(t.type, "")
     if name not in ENGINES:
         raise KeyError(f"{t.id}: 엔진 {name!r}가 없다 (pricing.yaml {t.type}): {sorted(ENGINES)}")
     return name
@@ -153,7 +191,7 @@ class Portfolio:
                 name = engine_name(t, cfg)
                 key = (name, *t.market_names())
                 if key not in self.engines:
-                    self.engines[key] = ENGINES[name](t, market)
+                    self.engines[key] = ENGINES[name](t, market, cfg.pricing.engines.get(name, {}))
                 inst.setPricingEngine(self.engines[key])
                 self.instruments[i] = inst
         self.market = market

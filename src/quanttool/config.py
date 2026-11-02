@@ -3,6 +3,8 @@
 configs/
   conventions/rates.yaml   관례 이름 → 결제일·일수·쿠폰 주기 …
   curves/*.yaml            커브 하나의 레시피 (시세 키, 헬퍼 구간, 보간, 요인 격자)
+  equity/*.yaml            주식 하나: 현물·배당·IV 격자 시세 키, Heston 모델 설정
+  pricing.yaml             상품 종류 → 엔진, 엔진 인자
   risk.yaml                민감도 이동 크기·방식, 상품별 덮어쓰기, cross gamma 쌍
 """
 
@@ -21,6 +23,7 @@ CALENDARS = {
     "UnitedStates.Settlement": lambda: ql.UnitedStates(ql.UnitedStates.Settlement),
     "SouthKorea.Settlement": lambda: ql.SouthKorea(ql.SouthKorea.Settlement),
     "TARGET": ql.TARGET,
+    "UnitedStates.NYSE": lambda: ql.UnitedStates(ql.UnitedStates.NYSE),
     "NullCalendar": ql.NullCalendar,
 }
 DAY_COUNTERS = {
@@ -188,11 +191,68 @@ class RiskConfig(_Model):
     cross_gamma: list[tuple[str, str]] = []  # 요인 키 쌍, 예: ("UST/5Y", "UST/10Y")
 
 
+class PricingConfig(_Model):
+    """상품 종류 → 엔진 이름, 엔진 이름 → 엔진 인자 (FD 격자 크기 등)."""
+
+    products: dict[str, str] = {}
+    engines: dict[str, dict[str, float | int | str]] = {}
+
+
+class VolGrid(_Model):
+    """IV 격자 시세. strikes는 asof 현물 대비 % (100 = ATM)."""
+
+    quote_key: str  # 예: EQ/VOL/SPX/{expiry}/{strike}
+    expiries: list[str]
+    strikes: list[int]
+
+
+class HestonConfig(_Model):
+    """서페이스에 캘리브레이션하는 Heston 모델 (파생 시장 객체)."""
+
+    name: str
+    init: dict[str, float]  # v0, kappa, theta, sigma, rho 초기값
+    recalibrate: bool = (
+        True  # 기초 객체(spot·vol …)가 바뀌면 다시 캘리브레이션 (아니면 파라미터 고정)
+    )
+    expiries: list[str] = []  # 비우면 vol 격자 전체
+    strikes: list[int] = []
+    optimizer: dict[str, float | int] = {}  # max_iterations, root/function/gradient epsilon …
+
+
+class EquityConfig(_Model):
+    name: str  # 현물 객체 이름. 배당 커브 {name}_DIV, vol {name}_VOL
+    calendar: str
+    day_count: str = "Actual365Fixed"
+    discount_curve: str
+    spot_key: str
+    dividend_key: str  # 연속복리 배당률 (평탄)
+    dividend_tenors: list[str]
+    vol: VolGrid
+    heston: HestonConfig | None = None
+
+    @field_validator("calendar")
+    @classmethod
+    def _cal(cls, v):
+        return _check(CALENDARS, "달력", v)
+
+    @field_validator("day_count")
+    @classmethod
+    def _dc(cls, v):
+        return _check(DAY_COUNTERS, "일수 계산", v)
+
+    def ql_calendar(self) -> ql.Calendar:
+        return CALENDARS[self.calendar]()
+
+    def ql_day_count(self) -> ql.DayCounter:
+        return DAY_COUNTERS[self.day_count]()
+
+
 class Config(_Model):
     conventions: dict[str, Conventions]
     curves: dict[str, CurveConfig]
     indices: dict[str, IndexConfig] = {}
-    pricing: dict[str, str] = {}  # 상품 종류 → 엔진 이름 (portfolio.ENGINES)
+    pricing: PricingConfig = PricingConfig()
+    equities: dict[str, EquityConfig] = {}
     risk: RiskConfig = RiskConfig()
 
     def model_post_init(self, _ctx) -> None:
@@ -210,6 +270,9 @@ class Config(_Model):
         for name, i in self.indices.items():
             if i.curve not in self.curves:
                 raise ValueError(f"지수 {name}: 예측 커브 {i.curve!r}가 없다")
+        for e in self.equities.values():
+            if e.discount_curve not in self.curves:
+                raise ValueError(f"{e.name}: 할인 커브 {e.discount_curve!r}가 없다")
 
     def build_order(self) -> list[str]:
         """의존 먼저 순서 (위상 정렬). 순환이면 오류."""
@@ -246,6 +309,11 @@ def load_config(root: str | Path = "configs") -> Config:
             raise ValueError(f"커브 이름 중복: {data['name']} ({p})")
         curves[data["name"]] = data
 
+    equities = {}
+    for p in sorted((root / "equity").glob("*.yaml")):
+        data = _read(p)
+        equities[data["name"]] = data
+
     def optional(name):
         return _read(root / name) if (root / name).exists() else {}
 
@@ -255,6 +323,7 @@ def load_config(root: str | Path = "configs") -> Config:
             "curves": curves,
             "indices": optional("indices.yaml"),
             "pricing": optional("pricing.yaml"),
+            "equities": equities,
             "risk": optional("risk.yaml"),
         }
     )
