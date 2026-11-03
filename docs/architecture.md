@@ -1,12 +1,12 @@
-기본 설정/입력 : 
-1. config
-2. quote data
+# 소스 설계구조
+기본 설정과 데이터 : 
+1. config : 
+  - configs/yaml : 문서화된 세팅
+  - config.py : 
+2. quoted data : 외부 데이터
 
-
-
-
-시장 객체
-1. quotes
+시장 객체화 :
+1. quotes.py : 시세DB를 {날짜: {키: 값}}으로 딕셔너리화
 2. MarketObject : 시장 기본단위
   - 설계구조  :
     - `.handle`:

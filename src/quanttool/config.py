@@ -1,14 +1,3 @@
-"""설정 읽기: configs/의 YAML 네 개 → 검증된 Config 하나.
-
-configs/
-  conventions.yaml   금리 관례 이름 → 달력·일수·결제일·쿠폰 주기 … (커브와 상품이 함께 참조)
-  market.yaml        indices: 금리 지수 / curves: 커브 레시피 /
-                     equities: 주식 (현물·배당·IV 격자, Heston)
-  products.yaml      engines: {defaults: 상품 종류 → 엔진, params: 엔진 → 인자} /
-                     templates: 상품 템플릿
-  risk.yaml          민감도 이동 크기·방식, 상품별 덮어쓰기, cross gamma 쌍
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,7 +7,7 @@ import QuantLib as ql
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# --- 문자열 → QuantLib (지원 목록을 명시해 오타를 막는다)
+# 문자열과 QuantLib 객체 매핑
 CALENDARS = {
     "UnitedStates.GovernmentBond": lambda: ql.UnitedStates(ql.UnitedStates.GovernmentBond),
     "UnitedStates.Settlement": lambda: ql.UnitedStates(ql.UnitedStates.Settlement),

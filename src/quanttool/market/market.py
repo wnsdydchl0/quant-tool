@@ -13,15 +13,14 @@ from .equity import build_equity, build_heston
 
 
 class MarketObject(Protocol):
-    """시장 객체 하나가 지키는 규격. 새 객체(vol 서페이스, 모델 …)는 이것만 맞춘다.
+    """시장 기본객체의 규격.
 
-    handle      상품·엔진이 연결되는 자리 (커브·vol: RelinkableHandle, 현물: QuoteHandle)
-    factors()   {이름: SimpleQuote} — 흔들 수 있는 값 (기준 대비 이동, 기준 0)
+    handle      의존성 관리
+    factors()   요인 딕셔너리. {이름: SimpleQuote}
     refresh()   요인이 바뀐 뒤 객체를 다시 만들어야 하면 여기서 (Observer로 따라오면 할 일 없음)
-    roll(d)     평가일을 d로 옮길 때
-    depends_on  (선택) 기대는 시장 객체 이름. 있으면 파생 객체이고, 시장이 의존 순서로 refresh한다
+    roll(d)     평가일을 d로 옮길 때 -> 근데 굳이 필요해? 그니까 어차피 하루 옮기고 refresh랑 달라? 
+    depends_on  (선택) 기대는 시장 객체 이름. 있으면 파생 객체이고, 시장이 의존 순서로 refresh한다 이게 필요해? 자동으로 의존성 파악 못하나 없으면 ? 
 
-    구현: curves.CurveFactors(금리·배당 커브), equity.EquitySpot·VolSurface·HestonModelObject.
     """
 
     handle: object
