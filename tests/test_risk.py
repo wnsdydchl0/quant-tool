@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 import QuantLib as ql
 
-from quanttool.analysis.risk import cross_gamma, key_rate, scenario_pnl, theta
+from quanttool.analysis.risk import cross_gamma, factor_delta, key_rate, scenario_pnl, theta
 from quanttool.analysis.scenarios import bucket, combine, from_loadings, parallel, triangle_weight
 from quanttool.config import Override
 from quanttool.market.curves import DC, to_ql_date
@@ -131,3 +131,24 @@ def test_theta_is_forward_forward(config, market, book):
     base = book.npvs()
     for i in book.ids():
         assert th[i] == pytest.approx(rolled[i] - base[i], rel=1e-9)
+
+
+def test_factor_delta_is_central_difference(market, book):
+    """factor_delta = (+h 손익 − (−h) 손익) / 2, 요인 키 하나도 규칙 함수도."""
+    h = 1e-4
+    fd = factor_delta(book, market, {"p": lambda x: parallel(market, "UST", x), "k": "UST/10Y"}, h)
+    up_down = scenario_pnl(
+        book,
+        market,
+        {"u": parallel(market, "UST", h), "d": parallel(market, "UST", -h),
+         "ku": {"UST/10Y": h}, "kd": {"UST/10Y": -h}},
+    )  # fmt: skip
+    assert fd["delta"].loc["p", "total"] == pytest.approx(
+        (up_down.loc["u", "total"] - up_down.loc["d", "total"]) / 2, rel=1e-12
+    )
+    assert fd["delta"].loc["k", "total"] == pytest.approx(
+        (up_down.loc["ku", "total"] - up_down.loc["kd", "total"]) / 2, rel=1e-12
+    )
+    assert fd["gamma"].loc["p", "total"] == pytest.approx(
+        up_down.loc["u", "total"] + up_down.loc["d", "total"], rel=1e-9
+    )

@@ -1,15 +1,15 @@
 """포트폴리오: 거래 명세 → QuantLib 상품 + 엔진, 시장의 이름 붙은 객체로 가격.
 
-- 거래 = 상품 템플릿(configs/products.yaml templates: 관례·지수·할인·기초자산처럼 거래마다 같은 값)
-  + 거래 값(행사가·만기·수량 …). 코드에서는 trade(cfg, "SPX_EURO", strike=…, …),
-  파일에서는 {product: SPX_EURO, strike: …}. 템플릿 없이 모든 필드를 직접 써도 된다.
+- 거래 = 상품 템플릿(configs/products.yaml templates: 관례·지수·할인처럼 거래마다 같은 값)
+  + 거래 값(쿠폰·고정금리·만기·액면 …). 코드에서는 trade(cfg, "KRW_IRS_CD91", fixed_rate=…, …),
+  파일에서는 {product: KRW_IRS_CD91, fixed_rate: …}. 템플릿 없이 모든 필드를 직접 써도 된다.
 
 - 거래는 시장 객체를 이름으로 가리킨다 (curve: UST, discount: KOFR, index: CD91 …).
 - 상품 종류마다 명세(TRADES)와 조립 함수(BUILDERS) 하나. 조립 함수는 상품만 만들고 엔진은 모른다.
 - 엔진은 configs/products.yaml engines.defaults가 상품 종류별로 고르고
   (템플릿·거래의 engine 필드로 덮어쓰기), ENGINES의 함수가 시장 객체로 만든다.
   같은 (엔진, 시장 객체) 조합은 엔진 하나를 공유한다.
-  같은 상품을 다른 방법(예: 옵션 BS 해석해 / FD / Heston)으로 평가해 비교하는 자리다.
+  같은 상품을 다른 방법(예: 단일 커브 / 듀얼 커브 할인)으로 평가해 비교하는 자리다.
 """
 
 from __future__ import annotations
@@ -107,49 +107,11 @@ def build_irswap(t: IRSwap, market: Market, cfg: Config) -> ql.VanillaSwap:
                           index, t.spread, index.dayCounter())  # fmt: skip
 
 
-# --- 주식 옵션 (유럽형)
-class EquityOption(Trade):
-    """유럽형 콜·풋. quantity < 0이면 매도. 시장 객체: 현물, 할인 커브, 배당 커브, vol (, 모델)."""
-
-    type: Literal["EquityOption"] = "EquityOption"
-    quantity: float
-    option_type: Literal["Call", "Put"]
-    strike: float
-    expiry: date
-    underlying: str  # 현물 (예: SPX)
-    curve: str  # 할인
-    dividend: str  # 예: SPX_DIV
-    vol: str  # 예: SPX_VOL
-    model: str = ""  # Heston 엔진이 쓰는 모델 객체 (예: SPX_HESTON)
-
-    def market_names(self):
-        return (self.underlying, self.curve, self.dividend, self.vol, self.model)
-
-    def multiplier(self) -> float:
-        return self.quantity
-
-
-def build_equity_option(t: EquityOption, market: Market, cfg: Config) -> ql.VanillaOption:
-    kind = ql.Option.Call if t.option_type == "Call" else ql.Option.Put
-    return ql.VanillaOption(ql.PlainVanillaPayoff(kind, t.strike),
-                            ql.EuropeanExercise(to_ql_date(t.expiry)))  # fmt: skip
-
-
-def bs_process(t: EquityOption, m: Market) -> ql.GeneralizedBlackScholesProcess:
-    """현물 + 배당 + 할인 + vol 서페이스 Handle. 요인을 흔들면 프로세스가 따라온다."""
-    return ql.GeneralizedBlackScholesProcess(m[t.underlying], m[t.dividend], m[t.curve], m[t.vol])
-
-
 # --- 엔진: 이름 → (거래, 시장, 엔진 인자) → QuantLib 엔진. 인자는 products.yaml engines.params
 Engine = Callable[[Trade, Market, dict], ql.PricingEngine]
 ENGINES: dict[str, Engine] = {
     "DiscountingBond": lambda t, m, p: ql.DiscountingBondEngine(m[t.curve]),
     "DiscountingSwap": lambda t, m, p: ql.DiscountingSwapEngine(m[t.discount]),
-    "AnalyticBS": lambda t, m, p: ql.AnalyticEuropeanEngine(bs_process(t, m)),
-    "AnalyticHeston": lambda t, m, p: ql.AnalyticHestonEngine(m[t.model]),
-    "FdBS": lambda t, m, p: ql.FdBlackScholesVanillaEngine(
-        bs_process(t, m), int(p["t_grid"]), int(p["x_grid"]), int(p.get("damping_steps", 0))
-    ),
 }
 
 
@@ -175,12 +137,12 @@ def make_trade(record: Mapping, products: Mapping[str, Mapping] | None = None) -
 
 
 def trade(cfg: Config, product: str, **fields) -> Trade:
-    """코드에서 거래 하나: trade(cfg, "SPX_EURO", id="c1", option_type="Call", strike=6000, …)."""
+    """코드에서 거래 하나: trade(cfg, "KRW_IRS_CD91", id="s1", fixed_rate=0.03, …)."""
     return make_trade({"product": product, **fields}, cfg.products)
 
 
-TRADES = {"Bond": Bond, "IRSwap": IRSwap, "EquityOption": EquityOption}
-BUILDERS = {"Bond": build_bond, "IRSwap": build_irswap, "EquityOption": build_equity_option}
+TRADES = {"Bond": Bond, "IRSwap": IRSwap}
+BUILDERS = {"Bond": build_bond, "IRSwap": build_irswap}
 
 
 def engine_name(t: Trade, cfg: Config) -> str:

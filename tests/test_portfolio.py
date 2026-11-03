@@ -102,21 +102,22 @@ def test_product_template_equals_explicit_record(config, market):
 
 
 def test_record_overrides_template_and_unknown_template(config, market):
-    rec = {"id": "c", "product": "SPX_EURO", "quantity": 1, "option_type": "Call",
-           "strike": 6000, "expiry": "2027-10-22", "vol": "OTHER_VOL"}  # fmt: skip
-    t = Portfolio.from_records([rec], config.products).trades["c"]
-    assert t.vol == "OTHER_VOL" and t.dividend == "SPX_DIV"
+    rec = {"id": "s", "product": "KRW_IRS_CD91", "notional": 1e10, "fixed_rate": 0.03,
+           "start_date": "2026-10-26", "maturity_date": "2031-10-26",
+           "discount": "CD91"}  # fmt: skip
+    t = Portfolio.from_records([rec], config.products).trades["s"]
+    assert t.discount == "CD91" and t.index == "CD91" and t.conventions == "KRW_IRS"
     with pytest.raises(KeyError, match="템플릿"):
         Portfolio.from_records([{**rec, "product": "NOPE"}], config.products)
 
 
 def test_trades_from_code_reproduce_position_file(config, market, load):
-    file_book = load("spx_options")
+    file_book = load("krw_swaps")
     code_book = Portfolio([
-        trade(config, "SPX_EURO", id="SPX_1Y_C100", quantity=10, option_type="Call", strike=6000,
-              expiry=date(2027, 10, 22)),
-        trade(config, "SPX_EURO", id="SPX_6M_P90", quantity=-20, option_type="Put", strike=5400,
-              expiry=date(2027, 4, 23)),
+        trade(config, "KRW_IRS_CD91", id="IRS_5Y_PAY", notional=1e10, fixed_rate=0.0288,
+              pay_fixed=True, start_date=date(2026, 10, 26), maturity_date=date(2031, 10, 26)),
+        trade(config, "KRW_IRS_CD91", id="IRS_10Y_REC", notional=5e9, fixed_rate=0.03,
+              pay_fixed=False, start_date=date(2026, 10, 26), maturity_date=date(2036, 10, 26)),
     ])  # fmt: skip
     assert code_book.trades == file_book.trades
     assert code_book.build(market, config).npv() == pytest.approx(

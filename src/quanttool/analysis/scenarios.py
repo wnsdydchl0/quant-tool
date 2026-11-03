@@ -1,7 +1,7 @@
 """시나리오 = {요인 키: 기준 대비 이동}. 만드는 규칙은 보통 함수다.
 
 - 요인 키는 "객체 이름/요인 이름" (커브면 "UST/5Y", 값은 제로금리 이동, 소수).
-- 여러 객체의 요인을 한 시나리오에 함께 담을 수 있다 (예: spot과 vol을 SSR로 함께, PCA 요인).
+- 여러 객체의 요인을 한 시나리오에 함께 담을 수 있다 (예: KOFR·CD91을 함께, PCA 요인).
 - 적용은 market.apply(s) 또는 with market.scenario(s): ...
 """
 
@@ -60,22 +60,4 @@ def bucket(market: Market, curve: str, shift_tenors: list[str], j: int, size: fl
         w = triangle_weight(shift_times, j, time)
         if w:
             out[f"{curve}/{t}"] = size * w
-    return out
-
-
-def ssr(market: Market, spot: str, vol: str, rel_move: float, ssr: float) -> Scenario:
-    """현물 상대 이동 + 격자 vol 이동을 한 시나리오로 (skew stickiness ratio 규칙).
-
-    Δσ(T, K) = σ(T, K·(1+r)^(ssr−1)) − σ(T, K)   (σ = 기준 서페이스, 격자점마다)
-    ssr = 1: sticky strike (vol 이동 0), ssr = 0: sticky moneyness (K/S가 같으면 vol이 같다).
-    ATM vol 변화 ≈ ssr × skew × ln(1+r), skew = ∂σ/∂lnK.
-    """
-    s = market.objects[vol]
-    factor = (1.0 + rel_move) ** (ssr - 1.0)
-    out: Scenario = {f"{spot}/spot": rel_move}
-    for e, d in zip(s.expiries, s.dates, strict=True):
-        for k, strike in zip(s.strike_pcts, s.strikes, strict=True):
-            dv = s.vol(d, strike * factor) - s.vol(d, strike)
-            if dv:
-                out[f"{vol}/{e}/{k}"] = dv
     return out

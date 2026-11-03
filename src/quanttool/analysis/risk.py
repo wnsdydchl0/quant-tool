@@ -4,7 +4,7 @@
   값은 보고 단위(risk.shift_size, 1bp) 이동당 손익.
 - 상품별 규칙: risk.overrides[거래 id 또는 상품 종류] = {shift_size, scheme}.
   예를 들어 수치 엔진 상품은 10bp 중심 차분으로 계산하고 1bp 기준으로 다시 환산한다.
-- factor_delta: 아무 요인 또는 규칙 함수(SSR 등)의 delta·gamma.
+- factor_delta: 아무 요인 또는 규칙 함수(평행, PCA 등)의 delta·gamma.
 - cross_gamma: 요인 쌍을 함께 이동.
 - scenario_pnl: 시나리오 여러 개의 거래별 손익. theta: 시장 그대로, 날짜만 이동.
 """
@@ -68,8 +68,8 @@ def factor_delta(
 ) -> dict[str, pd.DataFrame]:
     """아무 요인·규칙의 delta·gamma. {"delta": 이동 이름 × 거래, "gamma": …} (size 이동당 손익).
 
-    moves의 값은 요인 키 하나("SPX/spot", "SPX_HESTON/v0") 또는 크기 h → 시나리오 함수
-    (예: lambda h: ssr(market, "SPX", "SPX_VOL", h, 0.0)). 아래 방향은 함수에 −h를 넣는다
+    moves의 값은 요인 키 하나("UST/5Y") 또는 크기 h → 시나리오 함수
+    (예: lambda h: parallel(market, "CD91", h)). 아래 방향은 함수에 −h를 넣는다
     (비선형 규칙도 그대로).
     """
     base = portfolio.npvs()

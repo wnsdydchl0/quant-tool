@@ -9,7 +9,6 @@ import QuantLib as ql
 
 from ..config import Config
 from .curves import BuiltCurve, CurveFactors, build_curve, evaluation_date, to_ql_date
-from .equity import build_equity, build_heston
 
 
 class MarketObject(Protocol):
@@ -19,7 +18,6 @@ class MarketObject(Protocol):
     factors()   요인 딕셔너리. {이름: SimpleQuote}
     refresh()   요인이 바뀐 뒤 객체를 다시 만들어야 하면 여기서 (Observer로 따라오면 할 일 없음)
     roll(d)     평가일을 d로 옮길 때 -> 근데 굳이 필요해? 그니까 어차피 하루 옮기고 refresh랑 달라? 
-    depends_on  (선택) 기대는 시장 객체 이름. 있으면 파생 객체이고, 시장이 의존 순서로 refresh한다 이게 필요해? 자동으로 의존성 파악 못하나 없으면 ? 
 
     """
 
@@ -45,7 +43,6 @@ class Market:
         self.objects = dict(objects)
         self.built = dict(built or {})  # 부트스트랩 결과 (진단용)
         self.indices = dict(indices or {})  # 파생 객체: 예측 커브 Handle에 연결된 지수
-        self._order = _dependency_order(self.objects)
         self._base = {k: q.value() for k, q in self.factors().items()}
         self.current: Mapping[str, float] | None = None
         self._saved: dict[str, tuple[list, list]] = {}  # roll이 채우기 전 지수 이력
@@ -79,19 +76,15 @@ class Market:
             raise KeyError(f"시장에 없는 요인 {unknown[:3]}: {list(factors)[:3]} …")
         for k, q in factors.items():
             q.setValue(self._base[k] + scenario.get(k, 0.0))
-        touched = {k.split("/", 1)[0] for k in scenario}
-        for name in self._order:  # 바뀐 객체와 그에 기대는 객체를 의존 먼저 순서로
-            deps = getattr(self.objects[name], "depends_on", [])
-            if name in touched or touched.intersection(deps):
-                touched.add(name)
-                self.objects[name].refresh()
+        for name in {k.split("/", 1)[0] for k in scenario}:  # 바뀐 객체만
+            self.objects[name].refresh()
         self.current = scenario
 
     def reset(self) -> None:
         for k, q in self.factors().items():
             q.setValue(self._base[k])
-        for name in self._order:
-            self.objects[name].refresh()
+        for o in self.objects.values():
+            o.refresh()
         self.current = None
 
     @contextmanager
@@ -115,8 +108,8 @@ class Market:
 
     def _set_date(self, d: date) -> None:
         self.date = d
-        for name in self._order:
-            self.objects[name].roll(d)
+        for o in self.objects.values():
+            o.roll(d)
 
     def _realize_fixings(self, d: date) -> None:
         start, end = to_ql_date(self.asof), to_ql_date(d)
@@ -140,24 +133,6 @@ class Market:
         self._saved = {}
 
 
-def _dependency_order(objects: Mapping[str, MarketObject]) -> list[str]:
-    """depends_on(파생 객체가 기대는 객체 이름)를 따라 의존 먼저 순서."""
-    order: list[str] = []
-
-    def visit(n: str, path: tuple[str, ...]) -> None:
-        if n in path:
-            raise ValueError("시장 객체 의존 순환: " + " → ".join([*path, n]))
-        if n in order:
-            return
-        for d in getattr(objects[n], "depends_on", []):
-            visit(d, (*path, n))
-        order.append(n)
-
-    for n in objects:
-        visit(n, ())
-    return order
-
-
 def build_market(
     asof: date, quotes: Mapping[str, float], cfg: Config, linked: bool = False
 ) -> Market:
@@ -171,8 +146,4 @@ def build_market(
         objects[name] = CurveFactors(b.curve, asof, c.factor_tenors)
         handles[name] = objects[name].handle
     indices = {n: ic.make(n, handles[ic.curve]) for n, ic in cfg.indices.items()}
-    for e in cfg.equities.values():
-        objects.update(build_equity(e, quotes, asof))
-        if e.heston:  # 파생 객체: 위 기초 객체에 캘리브레이션
-            objects[e.heston.name] = build_heston(e, objects, asof)
     return Market(asof, objects, built, indices)

@@ -7,7 +7,6 @@
   conventions.yaml   Conventions                         금리 관례 (날짜 규칙)
   market.yaml        indices  → IndexConfig              금리 지수
                      curves   → CurveConfig (Segment)    커브 레시피
-                     equities → EquityConfig (VolGrid, HestonConfig)
   products.yaml      engines   → PricingConfig           상품 종류 → 엔진, 엔진 인자
                      templates → dict                    상품 템플릿 (portfolio.expand)
   risk.yaml          RiskConfig (Override)               그릭 정의
@@ -17,7 +16,7 @@
   → Config.model_post_init 교차 검사(이름 참조가 실제로 있나) → Config.build_order(커브 의존 순서)
 
 이 파일의 구획
-  ① 바탕  ② 관례  ③ 시장 설정(금리, 주식)  ④ 상품·가격결정 설정
+  ① 바탕  ② 관례  ③ 시장 설정(금리)  ④ 상품·가격결정 설정
   ⑤ 분석 설정  ⑥ 최상위 설정  ⑦ 파일 읽기
 """
 
@@ -71,7 +70,7 @@ class _Model(BaseModel):
 
 
 # ==== ② 관례 (conventions.yaml)
-# 지금은 금리 커브·채권·스왑이 이름으로 참조한다. 주식은 달력·일수를 EquityConfig에 직접 둔다.
+# 금리 커브(헬퍼)와 채권·스왑(조립)이 이름으로 함께 참조한다.
 
 
 class Conventions(_Model):
@@ -121,8 +120,7 @@ class Conventions(_Model):
 
 
 # ==== ③ 시장 설정 (market.yaml): build_market이 시장 객체를 만드는 레시피
-
-# --- 금리: 지수 → 헬퍼 구간 → 커브 (구간이 지수를, 커브가 관례·지수·할인 커브를 이름으로 참조)
+# 금리: 지수 → 헬퍼 구간 → 커브 (구간이 지수를, 커브가 관례·지수·할인 커브를 이름으로 참조)
 
 
 class IndexConfig(_Model):
@@ -205,57 +203,6 @@ class CurveConfig(_Model):
         return deps - {self.name}
 
 
-# --- 주식: IV 격자 → Heston → 주식 (EquityConfig가 둘을 품는다)
-
-
-class VolGrid(_Model):
-    """IV 격자 시세. strikes는 asof 현물 대비 % (100 = ATM)."""
-
-    quote_key: str  # 예: EQ/VOL/SPX/{expiry}/{strike}
-    expiries: list[str]
-    strikes: list[int]
-
-
-class HestonConfig(_Model):
-    """서페이스에 캘리브레이션하는 Heston 모델 (파생 시장 객체)."""
-
-    name: str
-    init: dict[str, float]  # v0, kappa, theta, sigma, rho 초기값
-    # 이 시장 객체가 바뀌면 다시 캘리브레이션 (비우면 파라미터 고정). 예: [SPX, SPX_VOL]
-    recalibrate_on: list[str] = []
-    expiries: list[str] = []  # 비우면 vol 격자 전체
-    strikes: list[int] = []
-    optimizer: dict[str, float | int] = {}  # max_iterations, root/function/gradient epsilon …
-
-
-class EquityConfig(_Model):
-    name: str  # 현물 객체 이름. 배당 커브 {name}_DIV, vol {name}_VOL
-    calendar: str
-    day_count: str = "Actual365Fixed"
-    discount_curve: str
-    spot_key: str
-    dividend_key: str  # 연속복리 배당률 (평탄)
-    dividend_tenors: list[str]
-    vol: VolGrid
-    heston: HestonConfig | None = None
-
-    @field_validator("calendar")
-    @classmethod
-    def _cal(cls, v):
-        return _check(CALENDARS, "달력", v)
-
-    @field_validator("day_count")
-    @classmethod
-    def _dc(cls, v):
-        return _check(DAY_COUNTERS, "일수 계산", v)
-
-    def ql_calendar(self) -> ql.Calendar:
-        return CALENDARS[self.calendar]()
-
-    def ql_day_count(self) -> ql.DayCounter:
-        return DAY_COUNTERS[self.day_count]()
-
-
 # ==== ④ 상품·가격결정 설정 (products.yaml engines)
 # templates는 클래스 없이 dict로 두고, portfolio.py의 명세 클래스(Bond …)가 검증한다.
 
@@ -292,7 +239,6 @@ class Config(_Model):
     curves: dict[str, CurveConfig]
     indices: dict[str, IndexConfig] = {}
     pricing: PricingConfig = PricingConfig()
-    equities: dict[str, EquityConfig] = {}
     products: dict[str, dict] = {}  # 상품 템플릿 이름 → {type, 기본 필드} (portfolio.expand)
     risk: RiskConfig = RiskConfig()
 
@@ -311,12 +257,6 @@ class Config(_Model):
         for name, i in self.indices.items():
             if i.curve not in self.curves:
                 raise ValueError(f"지수 {name}: 예측 커브 {i.curve!r}가 없다")
-        for e in self.equities.values():
-            if e.discount_curve not in self.curves:
-                raise ValueError(f"{e.name}: 할인 커브 {e.discount_curve!r}가 없다")
-            deps = {e.name, e.discount_curve, f"{e.name}_DIV", f"{e.name}_VOL"}
-            if e.heston and not set(e.heston.recalibrate_on) <= deps:
-                raise ValueError(f"{e.heston.name}: recalibrate_on은 {sorted(deps)} 중에서")
 
     def build_order(self) -> list[str]:
         """의존 먼저 순서 (위상 정렬). 순환이면 오류."""
@@ -370,7 +310,6 @@ def load_config(root: str | Path = "configs") -> Config:
             "conventions": _read(root / "conventions.yaml"),
             "indices": market.get("indices") or {},
             "curves": _named(market.get("curves"), "커브"),
-            "equities": _named(market.get("equities"), "주식"),
             "pricing": products.get("engines") or {},
             "products": products.get("templates") or {},
             "risk": optional("risk.yaml"),
