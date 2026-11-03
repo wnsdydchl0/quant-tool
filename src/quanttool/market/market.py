@@ -1,14 +1,3 @@
-"""시장: 기초 객체(커브, 주식 현물·배당·vol 서페이스 …)를 이름으로 한 번에 묶는다.
-
-- 상품 A가 a·b·c, B가 b·c·d를 쓰더라도 b는 한 번만 만들고, 둘 다 market["b"]에 연결된다.
-  그래서 시나리오로 b를 흔들면 A와 B가 같은 b로 함께 움직인다.
-- 시나리오 = {요인 키: 기준 대비 이동}. 요인 키는 "객체 이름/요인 이름" (예: "UST/5Y").
-  apply는 누적되지 않는다 (요인 = 기준 + 이동). reset 또는 with market.scenario(s): 로 되돌린다.
-- roll(d): 시장은 그대로 두고 평가일만 d로 (theta).
-- 파생 객체(Heston 모델 …)는 depends_on으로 기대는 객체 이름을 밝힌다. 기초 객체가 바뀌면
-  그 뒤에 의존 순서로 refresh된다 (다시 캘리브레이션할지는 객체의 정책).
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
@@ -173,11 +162,7 @@ def _dependency_order(objects: Mapping[str, MarketObject]) -> list[str]:
 def build_market(
     asof: date, quotes: Mapping[str, float], cfg: Config, linked: bool = False
 ) -> Market:
-    """그 날의 시세로 설정의 모든 커브를 의존 먼저 순서로 만들어 시장 하나로 묶는다.
 
-    다른 커브에 기대는 커브(듀얼 커브의 프로젝션 커브)는 먼저 만든 커브의 시장 Handle(요인 포함)을
-    할인·지수 예측에 쓴다. 지수는 예측 커브 Handle에 연결된 파생 객체다(Market.index).
-    """
     built, objects, handles = {}, {}, {}
     for name in cfg.build_order():
         c = cfg.curves[name]

@@ -1,111 +1,13 @@
-# QuantTool
-
-QuantLib으로 다음 흐름을 다룬다.
-- 시세에서 커브·vol 서페이스·모델을 만든다.
-- 포지션을 그 시장에 붙여 가격을 낸다.
-- 시장을 흔들거나 시간을 움직여 민감도·시나리오 손익을 본다.
-
-일간 분석용이다. 그날 시세로 시장을 만들고, 결과는 표로 남긴다.
-
-## 1. 핵심 아이디어 세 가지
-
-1. **시장 객체: 기초 객체를 이름으로 한 번에 묶는다.**
-   - 일드커브, 배당 커브, vol 서페이스 같은 기초 객체는 여러 상품의 가격결정 기반이다.
-   - 상품 A가 a·b·c, B가 b·c·d를 쓰더라도 b는 한 번만 만든다. 둘 다 `market["b"]`에 연결된다.
-     그래서 b를 흔들면 A와 B가 **같은 b로 함께** 움직인다(효율 + 정합성).
-   - 기초 객체에 기대는 **파생 객체**도 시장에 함께 있다.
-     - 예측 커브에 연결된 금리 지수
-     - 서페이스에 캘리브레이션한 Heston 모델
-   - 기초 객체가 바뀌면 파생 객체가 의존 순서로 따라온다.
-2. **시나리오: 요인을 정하고, 연동 규칙은 함수로.**
-   - 시장 객체마다 "흔들 수 있는 값(요인)"을 스스로 정한다.
-     - 커브: 격자 만기별 제로 이동
-     - vol 서페이스: 격자 vol 이동
-     - Heston: 파라미터 이동
-   - 시나리오는 `{요인: 이동}` 사전이다.
-   - 변수 사이 연동(PCA 로딩, spot과 vol을 SSR로 함께 …)은 그 사전을 만드는 **보통 파이썬 함수**로 쓴다.
-3. **포트폴리오: 포지션을 시장에 붙여 가격.**
-   - 거래 = 상품 템플릿(`configs/products.yaml`: 관례·지수·할인·기초자산) + 거래 값(행사가·만기·수량).
-     코드에서 `trade(cfg, "SPX_EURO", …)`, 파일에서 YAML 한 줄. 시장 객체는 이름으로 가리킨다.
-   - 상품 조립과 가격결정 방법(엔진)은 따로다. 엔진은 설정으로 고른다.
-     예: 같은 옵션을 BS 해석해 / FD / Heston으로.
-
-원칙: **QuantLib을 그대로 쓰고, 추상화는 두 번째 사용처가 생길 때만 만든다.** 등록부·팩토리 대신 **사전과 함수**를 쓴다.
-
-| 사전 | 키 → 값 | 넓히는 법 |
-|---|---|---|
-| `curves.HELPERS` | 구간 종류(Bill, Bond, Deposit, OIS, Swap) → 헬퍼 함수 | 함수 하나 + 한 줄 |
-| `portfolio.TRADES`, `BUILDERS` | 상품 종류 → 명세 클래스, 조립 함수 | 클래스·함수 + 한 줄씩 |
-| `portfolio.ENGINES` | 엔진 이름 → (거래, 시장, 인자) → QuantLib 엔진 | 람다 한 줄 + `pricing.yaml` |
-
-## 2. 파일
-
-```
-src/quanttool/
-  config.py          설정 읽기: 관례, 커브 레시피(구간·의존), 지수, 주식, 엔진 선택, 리스크. build_order(커브 의존 순서)
-  market/            시장: 시세 → 시장 객체 → 이름으로 묶은 Market
-    quotes.py        시세 파일 → {날짜: {키: 값}}
-    curves.py        시세 → QuantLib 커브 (HELPERS: bill BEY·par bond·deposit·OIS·swap, 듀얼 커브 할인), 진단·커브 표,
-                     CurveFactors (기준 커브 + 격자 제로 이동 = 흔들 수 있는 커브)
-    equity.py        EquitySpot, VolSurface(격자 vol), HestonModelObject(캘리브레이션 파생 객체)
-    market.py        MarketObject 규격, Market (이름 → 객체, 지수, 요인, 시나리오 적용·해제, 의존 순서 refresh, roll), build_market
-  portfolio.py       Bond·IRSwap·EquityOption 명세 → QuantLib 상품, ENGINES, Portfolio (build, npvs)
-  analysis/          시나리오 분석
-    scenarios.py     시나리오 생성 함수: parallel, bucket(삼각 가중), from_loadings, combine, ssr
-    risk.py          key_rate(delta·gamma, 상품별 규칙), factor_delta(아무 요인·규칙), cross_gamma, scenario_pnl, theta
-configs/
-  conventions/rates.yaml   관례 (UST, KRW_OIS, KRW_IRS)
-  curves/*.yaml            커브 레시피: UST, KOFR(OIS), CD91(듀얼 커브: KOFR 할인)
-  indices.yaml             지수 (KOFR 오버나이트, CD91 3M) → 예측 커브
-  equity/spx.yaml          현물·배당·IV 격자 시세 키, Heston 설정(초기값, recalibrate_on, 최적화)
-  products.yaml            상품 템플릿 (UST_NOTE, KRW_IRS_CD91, SPX_EURO)
-  pricing.yaml             상품 종류 → 엔진, 엔진 인자 (FD 격자)
-  risk.yaml                민감도 이동 크기·방식, 상품별 덮어쓰기, cross gamma 쌍
-  estimated/               PCA 로딩 등 추정값 (출처와 함께)
-positions/                 예시 북: ust_book.yaml, krw_swaps.yaml, spx_options.yaml
-tests/                     QuantLib 직접 계산·해석해와 비교
-notebooks/                 tutorial/ 00~06, 01_ust_curve
-```
-
-**configs = 코드를 고치지 않고 동작을 바꾸는 값** (레시피 + 규칙)
-
-| 파일 | 누가 읽나 | 무엇 |
-|---|---|---|
-| `conventions/rates.yaml` | 커브·상품 조립 | 날짜 규칙: 달력, 일수, 결제일, 쿠폰 주기 |
-| `curves/*.yaml`, `indices.yaml`, `equity/*.yaml` | `build_market` | 시장 레시피: 어떤 시세로 어떤 헬퍼, 무엇에 의존, 요인 격자 |
-| `products.yaml` | `Portfolio`, `trade` | 상품 템플릿: 거래마다 같은 특성 |
-| `pricing.yaml` | `Portfolio.build` | 상품별 가격결정 방법, 엔진 인자 |
-| `risk.yaml` | `analysis/risk.py` | 그릭 정의: 이동 크기·방식, 상품별 덮어쓰기 |
-| `estimated/` | 시나리오 함수 | 추정값 (출처 필수) |
-
-**positions = 예시 북.** 실험·민감도 분석에서는 코드에서 `trade()`로 거래를 만드는 경우가 더 많다.
-백테스트는 초기 북을 파일에서 읽고, 헷지 거래는 루프가 만든다.
-실시간 체결·잔고(OMS, 브로커)는 이 툴 **바깥**이다. 바깥 어댑터가 같은 레코드 모양(`{product, …}`)을 넘기면 된다
-(`market-data`와 같은 위치). 이 툴은 "포지션 + 시장 → 가격·그릭·헷지 권고" 계산기로 둔다.
-
-**흐름 한 장**
-
-```
-quotes + configs ─► build_market ─► Market (이름 → 시장 객체, 지수)
-                    (의존 순서로 build_curve·build_equity·모델)        │
-positions / trade() ─► Portfolio.build(market) ─────────────────────────┘ 이름으로 연결
-analysis/scenarios: {요인: 이동} ─► market.scenario(s) ─► book.npvs() ─► analysis/risk: 반복·차분·환산·표
-```
-
-시나리오 하나는 `with market.scenario(s): book.npvs() - base` 세 줄이면 된다. risk는 그것을 여러 번 돌리는 규칙
-(위·아래, 만기마다, 상품별 크기·방식, 1bp 환산)이다. 즉 "어떻게 흔들어 몇으로 부를지" = 그릭 정의가 사는 곳이다.
-
-**시간과 평가일**
-- 커브는 오늘 시세로 **얼린다**: 기준일이 asof에 고정이고, 시세가 바뀌어도 다시 부트스트랩하지 않는다(`linked=True` 제외).
-- QuantLib 전역 평가일은 결제일·경과이자·지난 현금흐름·과거 fixing을 정한다. `market.active()`가 그것을 시장 날짜로 잠시 둔다.
-- `market.roll(d)`: 오늘 시장의 선도가 d의 시장이 된다(ForwardForward). 커브 `ImpliedTermStructure`, vol 선도 분산,
-  지난 fixing = 오늘 선도, Heston 재캘리브레이션. 그래서 theta ≈ carry이고 roll-down은 빠진다(검증: UST 북 theta = NPV × 3일 단기금리).
-  roll-down이 필요하면 "만기별 제로 그대로" 방식을 `CurveFactors.roll`에 추가한다.
-
-## 3. 객체 가이드
+**시장 객체 규격 `MarketObject`** (`market/market.py`) — 새 객체는 이것만 맞추면 시장·시나리오·리스크가 그대로 동작한다
+- `.handle`: 상품·엔진이 연결되는 자리
+- `.factors()`: `{이름: SimpleQuote}` (값은 기준 대비 이동, 기준 0)
+- `.refresh()`: 요인이 바뀐 뒤 다시 만들 일이 있으면 여기서 한다. 커브는 Observer로 따라와서 할 일 없음
+- `.roll(d)`: 시간 이동
+- (선택) `.depends_on`: 기대는 시장 객체 이름 목록. 있으면 파생 객체
+>코멘트 : 원본 코드보니까 Protocol 상속받아서 정의하던데 그 클래스는 무엇이고, 의도와 기능이 뭐야? 왜 필요한거야 Marketobject라는 클래스가? 
 
 **`Market`** (`market/market.py`) — 시장 객체 묶음
-- 만들기: `build_market(asof, quotes[asof], cfg, linked=False)`
+- 객체생성 함수: `build_market(asof, quotes[asof], cfg, linked=False)`
   - 커브는 의존 먼저 순서(`cfg.build_order()`)로 만든다.
   - 그다음 지수, 주식 객체, 파생 모델을 만든다.
 - 속성
@@ -120,28 +22,7 @@ analysis/scenarios: {요인: 이동} ─► market.scenario(s) ─► book.npvs(
   - 누적되지 않는다: 요인 = 기준 + 이동.
   - 바뀐 객체와 **그에 기대는 객체**(`depends_on`)를 의존 순서로 `refresh`한다.
 - 시간: `.roll(d)`(평가일 d, ForwardForward, 의존 순서, 지난 fixing은 오늘 선도로), `.active()`(평가일을 시장 날짜로 두는 with 블록)
-
-**시장 객체 규격 `MarketObject`** (`market/market.py`) — 새 객체는 이것만 맞추면 시장·시나리오·리스크가 그대로 동작한다
-- `.handle`: 상품·엔진이 연결되는 자리
-- `.factors()`: `{이름: SimpleQuote}` (값은 기준 대비 이동, 기준 0)
-- `.refresh()`: 요인이 바뀐 뒤 다시 만들 일이 있으면 여기서 한다. 커브는 Observer로 따라와서 할 일 없음
-- `.roll(d)`: 시간 이동
-- (선택) `.depends_on`: 기대는 시장 객체 이름 목록. 있으면 파생 객체
-
-| 객체 | 요인 | refresh | roll |
-|---|---|---|---|
-| `CurveFactors` (금리·배당 커브) | `UST/5Y`: 격자 제로 이동 | 없음 (`PiecewiseZeroSpreadedTermStructure`) | `ImpliedTermStructure` |
-| `EquitySpot` | `SPX/spot`: 상대 이동 | 현물 = 기준 × (1 + 이동) | 그대로 |
-| `VolSurface` | `SPX_VOL/1Y/90`: 격자 vol 이동 (만기/현물 대비 % 행사가) | `BlackVarianceSurface` 재조립 | 선도 분산 실현 |
-| `HestonModelObject` (파생) | `SPX_HESTON/v0` 등: 캘리브레이션 위 파라미터 이동 | `recalibrate_on` 객체가 바뀌었으면 재캘리브레이션 (입력별 캐시) + 이동 | 굴린 시장에 재캘리브레이션 |
-
-- `CurveFactors`: `PiecewiseZeroSpreadedTermStructure(부트스트랩 커브, 격자 이동)`. 이동 0이면 부트스트랩 커브와 정확히 같다.
-  속성 `.tenors`, `.times`, `.base`.
-- `VolSurface`: 행사가는 asof 현물 기준 **절대값**이다. 그래서 현물만 흔들면 sticky strike다.
-  속성 `.expiries`, `.strike_pcts`, `.strikes`, `.dates`, `.base`(이동 없는 서페이스), `.vol(날짜, 행사가)`.
-- `HestonModelObject`
-  - `.params()`, `.calibrated`, `.calibration_errors()`(헬퍼 가격 오차), `.helpers()`, `.depends_on`
-  - `recalibrate_on`(설정): 이 객체들이 바뀌면 다시 캘리브레이션한다. 목록 밖(예: 금리)이 바뀌면 파라미터를 고정하고 프로세스 Handle로만 따라온다.
+> 구현적인 궁금인데 왜 Market클래스의 생성자로 build market을 두는게 아니라 굳이 분리해서 함수를 정의한거야 ? 그리고 그냥 마켓 객체의 클래스 메소드나 변수들등등 설명하면서 설계의도와 기능 알려줘.
 
 **커브** (`market/curves.py`)
 - 구간 종류마다 헬퍼 함수 `HELPERS[type](key, quote, tenor, segment, ctx)`
