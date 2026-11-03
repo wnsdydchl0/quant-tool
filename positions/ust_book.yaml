@@ -1,4 +1,4 @@
-# 예시 북 (액면 USD, 음수 = 매도). 쿠폰·만기는 예시 값. 상품 특성은 configs/products.yaml UST_NOTE.
+# 예시 북 (액면 USD, 음수 = 매도). 쿠폰·만기는 예시 값. 상품 특성은 configs/products.yaml templates.UST_NOTE.
 - {id: UST_2Y,  product: UST_NOTE, notional: 2.0e7,  coupon: 0.035,   issue_date: 2026-09-30, maturity_date: 2028-09-30}
 - {id: UST_5Y,  product: UST_NOTE, notional: 1.0e7,  coupon: 0.03625, issue_date: 2026-09-30, maturity_date: 2031-09-30}
 - {id: UST_10Y, product: UST_NOTE, notional: 1.0e7,  coupon: 0.04125, issue_date: 2026-08-15, maturity_date: 2036-08-15}

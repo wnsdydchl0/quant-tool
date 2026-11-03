@@ -43,7 +43,7 @@ def test_config_errors(tmp_path):
 
     root = tmp_path / "configs"
     shutil.copytree(Path(__file__).resolve().parents[1] / "configs", root)
-    p = root / "conventions" / "rates.yaml"
+    p = root / "conventions.yaml"
     d = yaml.safe_load(p.read_text())
     d["UST"]["calendar"] = "Mars"
     p.write_text(yaml.safe_dump(d))

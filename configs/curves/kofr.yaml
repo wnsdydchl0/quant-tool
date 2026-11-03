@@ -1,7 +1,0 @@
-# KRW 무위험(KOFR) 할인 커브: KOFR OIS
-name: KOFR
-conventions: KRW_OIS
-segments:
-  - {type: OIS, index: KOFR, quote_key: "OIS/RATE/KRW/KOFR/{tenor}", tenors: [1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]}
-interpolation: LogLinearDiscount
-factor_tenors: [1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]

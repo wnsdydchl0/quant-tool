@@ -1,4 +1,4 @@
-# 예시 북: KRW IRS (상품 특성은 configs/products.yaml KRW_IRS_CD91). 금리·만기는 예시 값.
+# 예시 북: KRW IRS (상품 특성은 configs/products.yaml templates.KRW_IRS_CD91). 금리·만기는 예시 값.
 - {id: IRS_5Y_PAY,  product: KRW_IRS_CD91, notional: 1.0e10, fixed_rate: 0.0288, pay_fixed: true,
    start_date: 2026-10-26, maturity_date: 2031-10-26}
 - {id: IRS_10Y_REC, product: KRW_IRS_CD91, notional: 5.0e9,  fixed_rate: 0.0300, pay_fixed: false,

@@ -162,7 +162,6 @@ def _dependency_order(objects: Mapping[str, MarketObject]) -> list[str]:
 def build_market(
     asof: date, quotes: Mapping[str, float], cfg: Config, linked: bool = False
 ) -> Market:
-
     built, objects, handles = {}, {}, {}
     for name in cfg.build_order():
         c = cfg.curves[name]

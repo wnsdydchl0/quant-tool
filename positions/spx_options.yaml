@@ -1,3 +1,3 @@
-# 예시 북: SPX 옵션 (상품 특성은 configs/products.yaml SPX_EURO). 수량 = 지수 단위 계약 수.
+# 예시 북: SPX 옵션 (상품 특성은 configs/products.yaml templates.SPX_EURO). 수량 = 지수 단위 계약 수.
 - {id: SPX_1Y_C100, product: SPX_EURO, quantity: 10,  option_type: Call, strike: 6000, expiry: 2027-10-22}
 - {id: SPX_6M_P90,  product: SPX_EURO, quantity: -20, option_type: Put,  strike: 5400, expiry: 2027-04-23}

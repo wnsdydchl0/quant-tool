@@ -1,13 +1,14 @@
 """포트폴리오: 거래 명세 → QuantLib 상품 + 엔진, 시장의 이름 붙은 객체로 가격.
 
-- 거래 = 상품 템플릿(configs/products.yaml: 관례·지수·할인·기초자산처럼 거래마다 같은 값)
+- 거래 = 상품 템플릿(configs/products.yaml templates: 관례·지수·할인·기초자산처럼 거래마다 같은 값)
   + 거래 값(행사가·만기·수량 …). 코드에서는 trade(cfg, "SPX_EURO", strike=…, …),
   파일에서는 {product: SPX_EURO, strike: …}. 템플릿 없이 모든 필드를 직접 써도 된다.
 
 - 거래는 시장 객체를 이름으로 가리킨다 (curve: UST, discount: KOFR, index: CD91 …).
 - 상품 종류마다 명세(TRADES)와 조립 함수(BUILDERS) 하나. 조립 함수는 상품만 만들고 엔진은 모른다.
-- 엔진은 configs/pricing.yaml이 상품 종류별로 고르고(거래의 engine 필드로 덮어쓰기),
-  ENGINES의 함수가 시장 객체로 만든다. 같은 (엔진, 시장 객체) 조합은 엔진 하나를 공유한다.
+- 엔진은 configs/products.yaml engines.defaults가 상품 종류별로 고르고
+  (템플릿·거래의 engine 필드로 덮어쓰기), ENGINES의 함수가 시장 객체로 만든다.
+  같은 (엔진, 시장 객체) 조합은 엔진 하나를 공유한다.
   같은 상품을 다른 방법(예: 옵션 BS 해석해 / FD / Heston)으로 평가해 비교하는 자리다.
 """
 
@@ -33,7 +34,7 @@ class Trade(BaseModel):
 
     id: str
     product: str = ""  # 상품 템플릿 이름 (있으면)
-    engine: str = ""  # 비우면 configs/pricing.yaml의 상품 종류 기본값
+    engine: str = ""  # 비우면 configs/products.yaml engines.defaults의 상품 종류 기본값
 
     def market_names(self) -> tuple[str, ...]:
         """이 거래가 쓰는 시장 객체 이름 (엔진 공유 키)."""
@@ -139,7 +140,7 @@ def bs_process(t: EquityOption, m: Market) -> ql.GeneralizedBlackScholesProcess:
     return ql.GeneralizedBlackScholesProcess(m[t.underlying], m[t.dividend], m[t.curve], m[t.vol])
 
 
-# --- 엔진: 이름 → (거래, 시장, 엔진 인자) → QuantLib 엔진. 인자는 pricing.yaml engines
+# --- 엔진: 이름 → (거래, 시장, 엔진 인자) → QuantLib 엔진. 인자는 products.yaml engines.params
 Engine = Callable[[Trade, Market, dict], ql.PricingEngine]
 ENGINES: dict[str, Engine] = {
     "DiscountingBond": lambda t, m, p: ql.DiscountingBondEngine(m[t.curve]),
@@ -159,7 +160,9 @@ def expand(record: Mapping, products: Mapping[str, Mapping] | None) -> dict:
     if not name or products is None:
         return dict(record)
     if name not in products:
-        raise KeyError(f"상품 템플릿 {name!r}가 없다 (configs/products.yaml): {sorted(products)}")
+        raise KeyError(
+            f"상품 템플릿 {name!r}가 없다 (configs/products.yaml templates): {sorted(products)}"
+        )
     return {**products[name], **record}
 
 
@@ -181,9 +184,11 @@ BUILDERS = {"Bond": build_bond, "IRSwap": build_irswap, "EquityOption": build_eq
 
 
 def engine_name(t: Trade, cfg: Config) -> str:
-    name = t.engine or cfg.pricing.products.get(t.type, "")
+    name = t.engine or cfg.pricing.defaults.get(t.type, "")
     if name not in ENGINES:
-        raise KeyError(f"{t.id}: 엔진 {name!r}가 없다 (pricing.yaml {t.type}): {sorted(ENGINES)}")
+        raise KeyError(
+            f"{t.id}: 엔진 {name!r}가 없다 (products.yaml engines {t.type}): {sorted(ENGINES)}"
+        )
     return name
 
 
@@ -227,7 +232,7 @@ class Portfolio:
                 name = engine_name(t, cfg)
                 key = (name, *t.market_names())
                 if key not in self.engines:
-                    self.engines[key] = ENGINES[name](t, market, cfg.pricing.engines.get(name, {}))
+                    self.engines[key] = ENGINES[name](t, market, cfg.pricing.params.get(name, {}))
                 inst.setPricingEngine(self.engines[key])
                 self.instruments[i] = inst
         self.market = market

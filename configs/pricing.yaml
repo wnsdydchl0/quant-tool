@@ -1,8 +1,0 @@
-# 상품 종류 → 엔진 (portfolio.ENGINES). 거래의 engine 필드로 덮어쓸 수 있다.
-products:
-  Bond: DiscountingBond
-  IRSwap: DiscountingSwap
-  EquityOption: AnalyticBS
-# 엔진 인자
-engines:
-  FdBS: {t_grid: 400, x_grid: 400, damping_steps: 0}

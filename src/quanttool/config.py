@@ -1,12 +1,12 @@
-"""설정 읽기: 관례, 커브 레시피, 리스크 설정 (configs/의 YAML).
+"""설정 읽기: configs/의 YAML 네 개 → 검증된 Config 하나.
 
 configs/
-  conventions/rates.yaml   관례 이름 → 결제일·일수·쿠폰 주기 …
-  curves/*.yaml            커브 하나의 레시피 (시세 키, 헬퍼 구간, 보간, 요인 격자)
-  equity/*.yaml            주식 하나: 현물·배당·IV 격자 시세 키, Heston 모델 설정
-  products.yaml            상품 템플릿: 거래마다 같은 특성(관례·지수·할인·기초자산 …)
-  pricing.yaml             상품 종류 → 엔진, 엔진 인자
-  risk.yaml                민감도 이동 크기·방식, 상품별 덮어쓰기, cross gamma 쌍
+  conventions.yaml   금리 관례 이름 → 달력·일수·결제일·쿠폰 주기 … (커브와 상품이 함께 참조)
+  market.yaml        indices: 금리 지수 / curves: 커브 레시피 /
+                     equities: 주식 (현물·배당·IV 격자, Heston)
+  products.yaml      engines: {defaults: 상품 종류 → 엔진, params: 엔진 → 인자} /
+                     templates: 상품 템플릿
+  risk.yaml          민감도 이동 크기·방식, 상품별 덮어쓰기, cross gamma 쌍
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ class Segment(_Model):
     type: Literal["Bill", "Bond", "Deposit", "OIS", "Swap"]
     tenors: list[str] = Field(min_length=1)
     quote_key: str = ""  # 비우면 커브의 quote_key
-    index: str = ""  # Deposit·OIS·Swap이 쓰는 지수 (configs/indices.yaml)
+    index: str = ""  # Deposit·OIS·Swap이 쓰는 지수 (market.yaml indices)
 
 
 class IndexConfig(_Model):
@@ -193,10 +193,10 @@ class RiskConfig(_Model):
 
 
 class PricingConfig(_Model):
-    """상품 종류 → 엔진 이름, 엔진 이름 → 엔진 인자 (FD 격자 크기 등)."""
+    """products.yaml engines: 상품 종류 → 기본 엔진, 엔진 → 인자 (FD 격자 크기 등)."""
 
-    products: dict[str, str] = {}
-    engines: dict[str, dict[str, float | int | str]] = {}
+    defaults: dict[str, str] = {}
+    params: dict[str, dict[str, float | int | str]] = {}
 
 
 class VolGrid(_Model):
@@ -304,31 +304,32 @@ def _read(path: Path):
         return yaml.safe_load(f) or {}
 
 
+def _named(section: dict, kind: str) -> dict:
+    """{이름: 항목} → 항목마다 name 필드를 키로 채운다 (적었다면 키와 같아야 한다)."""
+    out = {}
+    for key, item in (section or {}).items():
+        if item.get("name", key) != key:
+            raise ValueError(f"{kind} {key!r}의 name이 키와 다르다: {item['name']!r}")
+        out[key] = {**item, "name": key}
+    return out
+
+
 def load_config(root: str | Path = "configs") -> Config:
     root = Path(root)
-    curves = {}
-    for p in sorted((root / "curves").glob("*.yaml")):
-        data = _read(p)
-        if data["name"] in curves:
-            raise ValueError(f"커브 이름 중복: {data['name']} ({p})")
-        curves[data["name"]] = data
-
-    equities = {}
-    for p in sorted((root / "equity").glob("*.yaml")):
-        data = _read(p)
-        equities[data["name"]] = data
 
     def optional(name):
         return _read(root / name) if (root / name).exists() else {}
 
+    market = optional("market.yaml")
+    products = optional("products.yaml")
     return Config.model_validate(
         {
-            "conventions": _read(root / "conventions" / "rates.yaml"),
-            "curves": curves,
-            "indices": optional("indices.yaml"),
-            "pricing": optional("pricing.yaml"),
-            "equities": equities,
-            "products": optional("products.yaml"),
+            "conventions": _read(root / "conventions.yaml"),
+            "indices": market.get("indices") or {},
+            "curves": _named(market.get("curves"), "커브"),
+            "equities": _named(market.get("equities"), "주식"),
+            "pricing": products.get("engines") or {},
+            "products": products.get("templates") or {},
             "risk": optional("risk.yaml"),
         }
     )

@@ -29,7 +29,7 @@ def market(config, quotes):
 
 @pytest.fixture
 def load(config):
-    """positions/{name}.yaml 예시 북 (configs/products.yaml 템플릿 적용)."""
+    """positions/{name}.yaml 예시 북 (configs/products.yaml templates 적용)."""
     return lambda name: Portfolio.from_file(
         ROOT / "positions" / f"{name}.yaml", products=config.products
     )

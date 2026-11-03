@@ -1,0 +1,57 @@
+# 시장 레시피: build_market이 이 파일로 지수·커브·주식 시장 객체를 만든다.
+# 섹션 키가 객체 이름이고, 다른 항목은 이름으로 참조한다
+# (관례 → conventions.yaml, 지수 → indices, 할인·예측 커브 → curves). 만드는 순서는 참조에서 자동으로 정해진다.
+
+# --- 금리 지수: 예측 커브(curve)에 연결된 파생 객체 (Market.index)
+indices:
+  KOFR: {type: Overnight, fixing_days: 0, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
+         currency: KRW, curve: KOFR}
+  CD91: {type: Ibor, tenor: 3M, fixing_days: 1, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
+         bdc: ModifiedFollowing, currency: KRW, curve: CD91}
+
+# --- 커브: 시세 키 틀, 헬퍼 구간(종류 → curves.HELPERS), 보간, 흔들 격자(factor_tenors, 제로 이동)
+curves:
+  UST:                                   # 미 재무부 par yield 국채 커브
+    quote_key: BOND/YIELD/USD/UST/PAR/{tenor}
+    conventions: UST
+    segments:
+      - {type: Bill, tenors: [1M, 2M, 3M, 4M, 6M, 1Y]}            # BEY → 할인채 가격
+      - {type: Bond, tenors: [2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y]}     # par yield = 쿠폰, 가격 100
+    interpolation: LogCubicDiscount
+    factor_tenors: [1M, 3M, 6M, 9M, 1Y, 18M, 2Y, 3Y, 4Y, 5Y, 6Y, 7Y, 8Y, 9Y, 10Y, 12Y, 15Y, 20Y, 25Y, 30Y]
+
+  KOFR:                                  # KRW 무위험 할인 커브: KOFR OIS
+    conventions: KRW_OIS
+    segments:
+      - {type: OIS, index: KOFR, quote_key: "OIS/RATE/KRW/KOFR/{tenor}", tenors: [1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]}
+    interpolation: LogLinearDiscount
+    factor_tenors: [1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]
+
+  CD91:                                  # CD91 프로젝션 커브: CD 3개월 + CD91 IRS, 스왑 할인은 KOFR (듀얼 커브)
+    conventions: KRW_IRS
+    discount_curve: KOFR
+    segments:
+      - {type: Deposit, index: CD91, quote_key: "MM/RATE/KRW/CD91/{tenor}", tenors: [3M]}
+      - {type: Swap, index: CD91, quote_key: "IRS/RATE/KRW/CD91/{tenor}", tenors: [1Y, 2Y, 3Y, 5Y, 7Y, 10Y]}
+    interpolation: LogLinearDiscount
+    factor_tenors: [3M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]
+
+# --- 주식: 현물·배당·IV 격자 시세 키, 할인 커브, Heston (객체 이름: {키}, {키}_DIV, {키}_VOL, heston.name)
+equities:
+  SPX:                                   # S&P 500 (합성 샘플 시세로 시험). 할인 UST, 배당은 평탄 배당률
+    calendar: UnitedStates.NYSE
+    day_count: Actual365Fixed
+    discount_curve: UST
+    spot_key: EQ/SPOT/SPX
+    dividend_key: EQ/DIVYIELD/SPX
+    dividend_tenors: [1Y, 2Y, 5Y]
+    vol:
+      quote_key: EQ/VOL/SPX/{expiry}/{strike}
+      expiries: [1M, 3M, 6M, 1Y, 2Y]
+      strikes: [80, 90, 100, 110, 120]   # 현물 대비 %
+    heston:
+      name: SPX_HESTON
+      init: {v0: 0.04, kappa: 2.0, theta: 0.04, sigma: 0.5, rho: -0.6}
+      recalibrate_on: [SPX, SPX_VOL]     # 현물·vol이 바뀌면 재캘리브레이션, 금리·배당은 파라미터 고정
+      optimizer: {max_iterations: 500, stationary_iterations: 50,
+                  root_epsilon: 1.0e-8, function_epsilon: 1.0e-8, gradient_epsilon: 1.0e-8}
