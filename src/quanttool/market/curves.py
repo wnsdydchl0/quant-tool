@@ -297,7 +297,7 @@ def conventions_for(cfg: Config, curve: str) -> Conventions:
 
 
 # --- 요인 층: 기준 커브 + 격자 제로 이동 (시장 객체)
-_FAR = "100Y"  # 마지막 격자점 뒤 평탄 외삽 끝점  # 마지막 격자점 뒤 평탄 외삽 끝점
+_FAR = "100Y"  # 마지막 격자점 뒤 평탄 외삽 끝점
 
 
 class CurveFactors:
