@@ -1,3 +1,26 @@
+"""설정 읽기: configs/의 YAML 네 개 → 검증된 Config 하나.
+
+문자열 설정을 QuantLib 기본 부품(달력·일수 계산·지수)으로 바꾸는 데까지만 한다.
+커브·상품 조립은 market/curves.py, portfolio.py가 한다.
+
+파일 ↔ 클래스
+  conventions.yaml   Conventions                         금리 관례 (날짜 규칙)
+  market.yaml        indices  → IndexConfig              금리 지수
+                     curves   → CurveConfig (Segment)    커브 레시피
+                     equities → EquityConfig (VolGrid, HestonConfig)
+  products.yaml      engines   → PricingConfig           상품 종류 → 엔진, 엔진 인자
+                     templates → dict                    상품 템플릿 (portfolio.expand)
+  risk.yaml          RiskConfig (Override)               그릭 정의
+
+흐름
+  load_config → YAML 읽기 → pydantic 필드 검사(각 클래스의 field_validator, ① _check)
+  → Config.model_post_init 교차 검사(이름 참조가 실제로 있나) → Config.build_order(커브 의존 순서)
+
+이 파일의 구획
+  ① 바탕  ② 관례  ③ 시장 설정(금리, 주식)  ④ 상품·가격결정 설정
+  ⑤ 분석 설정  ⑥ 최상위 설정  ⑦ 파일 읽기
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +30,9 @@ import QuantLib as ql
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# 문자열과 QuantLib 객체 매핑
+# ==== ① 바탕: 문자열 → QuantLib 매핑, 검사 함수, 설정 모델 바탕
+# 지원 목록을 명시해 YAML 오타를 읽는 순간 잡는다.
+
 CALENDARS = {
     "UnitedStates.GovernmentBond": lambda: ql.UnitedStates(ql.UnitedStates.GovernmentBond),
     "UnitedStates.Settlement": lambda: ql.UnitedStates(ql.UnitedStates.Settlement),
@@ -16,14 +41,18 @@ CALENDARS = {
     "UnitedStates.NYSE": lambda: ql.UnitedStates(ql.UnitedStates.NYSE),
     "NullCalendar": ql.NullCalendar,
 }
+
 DAY_COUNTERS = {
     "ActualActual.Bond": lambda: ql.ActualActual(ql.ActualActual.Bond),
     "Actual365Fixed": ql.Actual365Fixed,
     "Actual360": ql.Actual360,
     "Thirty360.BondBasis": lambda: ql.Thirty360(ql.Thirty360.BondBasis),
 }
+
 FREQUENCIES = {"Annual": ql.Annual, "Semiannual": ql.Semiannual, "Quarterly": ql.Quarterly}
+
 CURRENCIES = {"USD": ql.USDCurrency, "KRW": ql.KRWCurrency, "EUR": ql.EURCurrency}
+
 BDCS = {
     "Unadjusted": ql.Unadjusted,
     "Following": ql.Following,
@@ -39,6 +68,10 @@ def _check(table: dict, kind: str, name: str) -> str:
 
 class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+# ==== ② 관례 (conventions.yaml)
+# 지금은 금리 커브·채권·스왑이 이름으로 참조한다. 주식은 달력·일수를 EquityConfig에 직접 둔다.
 
 
 class Conventions(_Model):
@@ -87,16 +120,9 @@ class Conventions(_Model):
         return BDCS[self.payment_convention]
 
 
-class Segment(_Model):
-    """헬퍼 구간. 종류마다 curves.HELPERS의 헬퍼 함수 하나:
-    Bill(bill BEY → 할인채 가격), Bond(par yield 쿠폰·가격 100), Deposit(지수 예금 금리),
-    OIS(익일물 지수 스왑), Swap(고정 vs Ibor 지수, 할인은 curve.discount_curve).
-    """
+# ==== ③ 시장 설정 (market.yaml): build_market이 시장 객체를 만드는 레시피
 
-    type: Literal["Bill", "Bond", "Deposit", "OIS", "Swap"]
-    tenors: list[str] = Field(min_length=1)
-    quote_key: str = ""  # 비우면 커브의 quote_key
-    index: str = ""  # Deposit·OIS·Swap이 쓰는 지수 (market.yaml indices)
+# --- 금리: 지수 → 헬퍼 구간 → 커브 (구간이 지수를, 커브가 관례·지수·할인 커브를 이름으로 참조)
 
 
 class IndexConfig(_Model):
@@ -141,6 +167,18 @@ class IndexConfig(_Model):
         )
 
 
+class Segment(_Model):
+    """헬퍼 구간. 종류마다 curves.HELPERS의 헬퍼 함수 하나:
+    Bill(bill BEY → 할인채 가격), Bond(par yield 쿠폰·가격 100), Deposit(지수 예금 금리),
+    OIS(익일물 지수 스왑), Swap(고정 vs Ibor 지수, 할인은 curve.discount_curve).
+    """
+
+    type: Literal["Bill", "Bond", "Deposit", "OIS", "Swap"]
+    tenors: list[str] = Field(min_length=1)
+    quote_key: str = ""  # 비우면 커브의 quote_key
+    index: str = ""  # Deposit·OIS·Swap이 쓰는 지수 (market.yaml indices)
+
+
 class CurveConfig(_Model):
     name: str
     quote_key: str = (
@@ -167,25 +205,7 @@ class CurveConfig(_Model):
         return deps - {self.name}
 
 
-class Override(_Model):
-    shift_size: float = Field(gt=0)
-    scheme: Literal["Forward", "Central"] = "Forward"
-
-
-class RiskConfig(_Model):
-    shift_size: float = Field(1e-4, gt=0)  # 보고 단위 (1bp)
-    scheme: Literal["Forward", "Central"] = "Forward"
-    compute_gamma: bool = True
-    shift_tenors: dict[str, list[str]] = {}  # 커브 → 이동 만기 (없으면 요인 격자)
-    overrides: dict[str, Override] = {}  # 거래 id 또는 상품 종류 → 이동 크기·방식
-    cross_gamma: list[tuple[str, str]] = []  # 요인 키 쌍, 예: ("UST/5Y", "UST/10Y")
-
-
-class PricingConfig(_Model):
-    """products.yaml engines: 상품 종류 → 기본 엔진, 엔진 → 인자 (FD 격자 크기 등)."""
-
-    defaults: dict[str, str] = {}
-    params: dict[str, dict[str, float | int | str]] = {}
+# --- 주식: IV 격자 → Heston → 주식 (EquityConfig가 둘을 품는다)
 
 
 class VolGrid(_Model):
@@ -234,6 +254,37 @@ class EquityConfig(_Model):
 
     def ql_day_count(self) -> ql.DayCounter:
         return DAY_COUNTERS[self.day_count]()
+
+
+# ==== ④ 상품·가격결정 설정 (products.yaml engines)
+# templates는 클래스 없이 dict로 두고, portfolio.py의 명세 클래스(Bond …)가 검증한다.
+
+
+class PricingConfig(_Model):
+    """products.yaml engines: 상품 종류 → 기본 엔진, 엔진 → 인자 (FD 격자 크기 등)."""
+
+    defaults: dict[str, str] = {}
+    params: dict[str, dict[str, float | int | str]] = {}
+
+
+# ==== ⑤ 분석 설정 (risk.yaml)
+
+
+class Override(_Model):
+    shift_size: float = Field(gt=0)
+    scheme: Literal["Forward", "Central"] = "Forward"
+
+
+class RiskConfig(_Model):
+    shift_size: float = Field(1e-4, gt=0)  # 보고 단위 (1bp)
+    scheme: Literal["Forward", "Central"] = "Forward"
+    compute_gamma: bool = True
+    shift_tenors: dict[str, list[str]] = {}  # 커브 → 이동 만기 (없으면 요인 격자)
+    overrides: dict[str, Override] = {}  # 거래 id 또는 상품 종류 → 이동 크기·방식
+    cross_gamma: list[tuple[str, str]] = []  # 요인 키 쌍, 예: ("UST/5Y", "UST/10Y")
+
+
+# ==== ⑥ 최상위 설정: 위를 모두 묶고, 이름 참조를 교차 검사하고, 커브 의존 순서를 정한다
 
 
 class Config(_Model):
@@ -286,6 +337,9 @@ class Config(_Model):
         for n in self.curves:
             visit(n)
         return order
+
+
+# ==== ⑦ 파일 읽기: configs/ → Config
 
 
 def _read(path: Path):
