@@ -1,5 +1,4 @@
-# 금리 관례: 날짜 규칙. 커브(헬퍼)와 상품(채권·스왑 조립)이 이름으로 함께 참조한다.
-# 같은 관례를 돌려쓰고 일부만 바꿀 때는 YAML 앵커: 기준에 &이름, 파생에 <<: *이름 + 바꿀 필드.
+# 평가, 결제 관련 컨벤션
 UST:
   calendar: UnitedStates.GovernmentBond
   day_count: ActualActual.Bond       # 쿠폰 채권 (ISMA)

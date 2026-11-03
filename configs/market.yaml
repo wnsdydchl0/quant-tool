@@ -1,15 +1,5 @@
-# 시장 레시피: build_market이 이 파일로 지수·커브·주식 시장 객체를 만든다.
-# 섹션 키가 객체 이름이고, 다른 항목은 이름으로 참조한다
-# (관례 → conventions.yaml, 지수 → indices, 할인·예측 커브 → curves). 만드는 순서는 참조에서 자동으로 정해진다.
+# 시장 오브젝트의 컨벤션과 세팅
 
-# --- 금리 지수: 예측 커브(curve)에 연결된 파생 객체 (Market.index)
-indices:
-  KOFR: {type: Overnight, fixing_days: 0, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
-         currency: KRW, curve: KOFR}
-  CD91: {type: Ibor, tenor: 3M, fixing_days: 1, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
-         bdc: ModifiedFollowing, currency: KRW, curve: CD91}
-
-# --- 커브: 시세 키 틀, 헬퍼 구간(종류 → curves.HELPERS), 보간, 흔들 격자(factor_tenors, 제로 이동)
 curves:
   UST:                                   # 미 재무부 par yield 국채 커브
     quote_key: BOND/YIELD/USD/UST/PAR/{tenor}
@@ -55,3 +45,10 @@ equities:
       recalibrate_on: [SPX, SPX_VOL]     # 현물·vol이 바뀌면 재캘리브레이션, 금리·배당은 파라미터 고정
       optimizer: {max_iterations: 500, stationary_iterations: 50,
                   root_epsilon: 1.0e-8, function_epsilon: 1.0e-8, gradient_epsilon: 1.0e-8}
+
+# --- 금리 지수: 예측 커브(curve)에 연결된 파생 객체 (Market.index)
+indices:
+  KOFR: {type: Overnight, fixing_days: 0, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
+         currency: KRW, curve: KOFR}
+  CD91: {type: Ibor, tenor: 3M, fixing_days: 1, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
+         bdc: ModifiedFollowing, currency: KRW, curve: CD91}

@@ -1,30 +1,20 @@
-**시장 객체 규격 `MarketObject`** (`market/market.py`) — 새 객체는 이것만 맞추면 시장·시나리오·리스크가 그대로 동작한다
-- `.handle`: 상품·엔진이 연결되는 자리
-- `.factors()`: `{이름: SimpleQuote}` (값은 기준 대비 이동, 기준 0)
-- `.refresh()`: 요인이 바뀐 뒤 다시 만들 일이 있으면 여기서 한다. 커브는 Observer로 따라와서 할 일 없음
-- `.roll(d)`: 시간 이동
-- (선택) `.depends_on`: 기대는 시장 객체 이름 목록. 있으면 파생 객체
->코멘트 : 원본 코드보니까 Protocol 상속받아서 정의하던데 그 클래스는 무엇이고, 의도와 기능이 뭐야? 왜 필요한거야 Marketobject라는 클래스가? 
+기본 설정/입력 : 
+1. config
+2. quote data
 
-**`Market`** (`market/market.py`) — 시장 객체 묶음
-- 객체생성 함수: `build_market(asof, quotes[asof], cfg, linked=False)`
-  - 커브는 의존 먼저 순서(`cfg.build_order()`)로 만든다.
-  - 그다음 지수, 주식 객체, 파생 모델을 만든다.
-- 속성
-  - `.asof`, `.date`(지금 평가일)
-  - `.objects`(이름 → 시장 객체), `.indices`(이름 → 지수)
-  - `.built`(부트스트랩 결과, 진단용), `.current`(적용 중인 시나리오)
-- 조회
-  - `market["UST"]` → 상품이 연결되는 Handle (커브·vol: RelinkableHandle, 현물: QuoteHandle, Heston: 모델)
-  - `market.index("CD91")` → 예측 커브(요인 포함)에 연결된 `ql.IborIndex`
-- 요인: `.factors()` → `{"UST/5Y": SimpleQuote, "SPX/spot": …, "SPX_VOL/1Y/90": …, "SPX_HESTON/v0": …}`
-- 시나리오: `.apply(s)`, `.reset()`, `with market.scenario(s): …`
-  - 누적되지 않는다: 요인 = 기준 + 이동.
-  - 바뀐 객체와 **그에 기대는 객체**(`depends_on`)를 의존 순서로 `refresh`한다.
-- 시간: `.roll(d)`(평가일 d, ForwardForward, 의존 순서, 지난 fixing은 오늘 선도로), `.active()`(평가일을 시장 날짜로 두는 with 블록)
-> 구현적인 궁금인데 왜 Market클래스의 생성자로 build market을 두는게 아니라 굳이 분리해서 함수를 정의한거야 ? 그리고 그냥 마켓 객체의 클래스 메소드나 변수들등등 설명하면서 설계의도와 기능 알려줘.
 
-**커브** (`market/curves.py`)
+
+
+시장 객체
+1. quotes
+2. MarketObject : 시장 기본단위
+  - 설계구조  :
+    - `.handle`:
+    - `.factors()`: `{이름: SimpleQuote}` (값은 기준 대비 이동, 기준 0)
+    - `.refresh()`: 재갱신
+    - `.roll(d)`: 시간 이동 > 그리고 이거 없애는거 어때? 왜냐면 roll도 시간을 옮기고 refresh 하는거아냐? 분리할 이유 있나? 
+    - (선택) `.depends_on`: 기대는 시장 객체 이름 목록. 있으면 파생 객체? > 그리고 의존구조도 메소드나 이런거로 남겨둬야 파악가능해?  
+ - curve :
 - 구간 종류마다 헬퍼 함수 `HELPERS[type](key, quote, tenor, segment, ctx)`
   - `ctx`: 관례, 결제일, 할인 커브 Handle, 지수
 - 커브 레시피(`CurveConfig`)
@@ -33,6 +23,24 @@
 - `build_curve(...) → BuiltCurve(.curve, .helpers, .quotes())`
 - 진단: `helper_repricing(built, asof)`, `curve_table(handle, conventions)`, `curve_shape(table)`
 - 도구: `bill_price`, `bill_yield`, `evaluation_date(d)`
+
+3. Market : 시장 기본단위로 이뤄진 시장
+  - 생성 함수: `build_market(asof, quotes[asof], cfg, linked=False)`
+  - 속성
+    - `.asof`, `.date`(지금 평가일)
+    - `.objects`(이름 → 시장 객체), `.indices`(이름 → 지수) # > 여기서 왜 INDICIES는 또 따로보는거야 objects와 달리 ?
+    - `.built`(부트스트랩 결과, 진단용), `.current`(적용 중인 시나리오) > built, current 활용 예시좀 알려줘 아직 이해가 안되는 개념이야  
+  - 오브젝트 조회(그리고 이거 궁금한데 적절한 네이밍이 마켓오브젝트와 마켓인거야? 국룰 네이밍?)
+    - `market["UST"]` → 상품이 연결되는 Handle (커브·vol: RelinkableHandle, 현물: QuoteHandle, Heston: 모델)
+    - `market.index("CD91")` → 예측 커브(요인 포함)에 연결된 `ql.IborIndex`
+- 요인: `.factors()` → `{"UST/5Y": SimpleQuote, "SPX/spot": …, "SPX_VOL/1Y/90": …, "SPX_HESTON/v0": …}`
+- 시나리오: `.apply(s)`, `.reset()`, `with market.scenario(s): …`
+  - 누적되지 않는다: 요인 = 기준 + 이동.
+  - 바뀐 객체와 **그에 기대는 객체**(`depends_on`)를 의존 순서로 `refresh`한다.
+- 시간: `.roll(d)`(평가일 d, ForwardForward, 의존 순서, 지난 fixing은 오늘 선도로), `.active()`(평가일을 시장 날짜로 두는 with 블록)
+> 구현적인 궁금인데 왜 Market클래스의 생성자로 build market을 두는게 아니라 굳이 분리해서 함수를 정의한거야 ? 그리고 그냥 마켓 객체의 클래스 메소드나 변수들등등 설명하면서 설계의도와 기능 알려줘.
+
+
 
 **`Portfolio`** (`portfolio.py`)
 - 만들기
