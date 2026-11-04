@@ -6,14 +6,7 @@ import QuantLib as ql
 
 from quanttool.config import load_config
 from quanttool.market import build_market
-from quanttool.market.curves import (
-    bill_price,
-    bill_yield,
-    curve_shape,
-    curve_table,
-    helper_repricing,
-    to_ql_date,
-)
+from quanttool.market.curves import bill_price, to_ql_date
 from quanttool.market.quotes import read_quotes
 
 ASOF = date(2026, 10, 23)
@@ -21,9 +14,12 @@ K = "BOND/YIELD/USD/UST/PAR/{}"
 BP = 1e-4
 
 
-@pytest.mark.parametrize("days", [28, 91, 182, 183, 364])
-def test_bill_price_yield_round_trip(days):
-    assert bill_yield(bill_price(0.042, days), days) == pytest.approx(0.042, abs=1e-14)
+def test_bill_price_bey():
+    """반년 이하 단리, 넘으면 반기 복리 한 번 + 남은 기간 단리 (경계에서 이어진다)."""
+    y = 0.042
+    assert bill_price(y, 91) == pytest.approx(100 / (1 + y * 91 / 365), abs=1e-12)
+    assert bill_price(y, 182.5) == pytest.approx(100 / (1 + y / 2), abs=1e-12)
+    assert bill_price(y, 182.5 + 1e-9) == pytest.approx(bill_price(y, 182.5), abs=1e-8)
 
 
 def test_read_quotes(quotes, tmp_path):
@@ -49,15 +45,6 @@ def test_config_errors(tmp_path):
     p.write_text(yaml.safe_dump(d))
     with pytest.raises(ValidationError, match="Mars"):
         load_config(root)
-
-
-def test_helper_repricing_and_par_bonds(market):
-    table = helper_repricing(market.built["UST"], ASOF)
-    assert len(table) == 13 and table["error_bp"].abs().max() < 0.01
-    bond_keys = {K.format(t) for t in ["2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"]}
-    bonds = [h for h in market.built["UST"].helpers if h.key in bond_keys]
-    assert len(bonds) == 7
-    assert all(h.helper.quote().value() == pytest.approx(100.0, abs=1e-10) for h in bonds)
 
 
 def _direct_curve(config, q: dict):
@@ -103,21 +90,10 @@ def test_matches_direct_quantlib(config, quotes, market):
             assert market["UST"].discount(d) == pytest.approx(direct.discount(d), abs=1e-12)
 
 
-def test_curve_table_par_reproduces_quotes(config, quotes, market):
-    conv = config.conventions["UST"]
-    with market.active():
-        table = curve_table(market["UST"], conv)
-    for t in ["2Y", "5Y", "10Y", "30Y"]:
-        assert table.loc[t, "par"] == pytest.approx(quotes[ASOF][K.format(t)], abs=1e-8)
-    shape = curve_shape(table)
-    assert shape["2s10s"] == pytest.approx((table.loc["10Y", "par"] - table.loc["2Y", "par"]) * 1e4)
-
-
 def test_frozen_curve_ignores_quotes_and_dates(config, quotes, market):
-    built = market.built["UST"]
     d = ql.Date(17, 3, 2031)
     before = market["UST"].discount(d)
-    built.quotes()[K.format("10Y")].setValue(0.05)  # 시세를 바꾸고
+    market.quotes[K.format("10Y")].setValue(0.05)  # 시세를 바꾸고
     build_market(date(2026, 10, 22), quotes[date(2026, 10, 22)], config)  # 다른 날짜 시장을 만들고
     with __import__("quanttool.market.curves", fromlist=["x"]).evaluation_date(
         date(2027, 1, 1)
@@ -128,13 +104,13 @@ def test_frozen_curve_ignores_quotes_and_dates(config, quotes, market):
 
 def test_linked_curve_follows_quote(config, quotes):
     m = build_market(ASOF, quotes[ASOF], config, linked=True)
-    q = m.built["UST"].quotes()[K.format("10Y")]
+    assert {k for k in m.quotes if k.startswith(("OIS/", "MM/", "IRS/"))} and len(m.quotes) == 29
+    q = m.quotes[K.format("10Y")]
     with m.active():
         before = m["UST"].zeroRate(10.0, ql.Continuous).rate()
         q.setValue(q.value() + 0.0010)
         moved = m["UST"].zeroRate(10.0, ql.Continuous).rate() - before
     assert moved == pytest.approx(0.0010, abs=0.0003)
-    assert helper_repricing(m.built["UST"], ASOF)["error_bp"].abs().max() < 0.01
 
 
 def test_base_factor_curve_equals_bootstrapped_curve(market):
@@ -142,7 +118,7 @@ def test_base_factor_curve_equals_bootstrapped_curve(market):
     with market.active():
         for t in [0.01, 0.3, 1.7, 4.2, 11.0, 27.0, 45.0]:
             assert market["UST"].discount(t) == pytest.approx(
-                market.built["UST"].curve.discount(t), abs=1e-14
+                market.objects["UST"].base.discount(t), abs=1e-14
             )
 
 
@@ -188,7 +164,7 @@ def test_roll_is_forward_forward(market):
     with market.active():
         assert market["UST"].referenceDate() == to_ql_date(nxt)
         implied = ql.ImpliedTermStructure(
-            ql.YieldTermStructureHandle(market.built["UST"].curve), to_ql_date(nxt)
+            ql.YieldTermStructureHandle(market.objects["UST"].base), to_ql_date(nxt)
         )
         for t in [0.5, 5.0, 25.0]:
             assert market["UST"].discount(t) == pytest.approx(implied.discount(t), abs=1e-14)

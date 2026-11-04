@@ -8,7 +8,7 @@ from typing import Protocol
 import QuantLib as ql
 
 from ..config import Config
-from .curves import BuiltCurve, CurveFactors, build_curve, evaluation_date, to_ql_date
+from .curves import CurveFactors, build_curve, evaluation_date, to_ql_date
 
 
 class MarketObject(Protocol):
@@ -35,14 +35,16 @@ class Market:
         self,
         asof: date,
         objects: Mapping[str, MarketObject],
-        built: Mapping[str, BuiltCurve] | None = None,
         indices: Mapping[str, ql.Index] | None = None,
+        quotes: Mapping[str, ql.SimpleQuote] | None = None,
     ) -> None:
         self.asof = asof
         self.date = asof
         self.objects = dict(objects)
-        self.built = dict(built or {})  # 부트스트랩 결과 (진단용)
         self.indices = dict(indices or {})  # 파생 객체: 예측 커브 Handle에 연결된 지수
+        # 시세 키 → 커브가 쓴 SimpleQuote. linked 시장에서 값을 바꾸면 커브가 다시 풀린다
+        # (얼린 시장에서는 바꿔도 커브가 그대로다)
+        self.quotes = dict(quotes or {})
         self._base = {k: q.value() for k, q in self.factors().items()}
         self.current: Mapping[str, float] | None = None
         self._saved: dict[str, tuple[list, list]] = {}  # roll이 채우기 전 지수 이력
@@ -136,14 +138,14 @@ class Market:
 def build_market(
     asof: date, quotes: Mapping[str, float], cfg: Config, linked: bool = False
 ) -> Market:
-    built, objects, handles = {}, {}, {}
+    objects, handles, used = {}, {}, {}
     for name in cfg.build_order():
         c = cfg.curves[name]
-        b = build_curve(
+        curve, curve_quotes = build_curve(
             c, cfg.conventions[c.conventions], quotes, asof, linked, handles, cfg.indices
         )
-        built[name] = b
-        objects[name] = CurveFactors(b.curve, asof, c.factor_tenors)
+        used.update(curve_quotes)
+        objects[name] = CurveFactors(curve, asof, c.factor_tenors)
         handles[name] = objects[name].handle
     indices = {n: ic.make(n, handles[ic.curve]) for n, ic in cfg.indices.items()}
-    return Market(asof, objects, built, indices)
+    return Market(asof, objects, indices, used)

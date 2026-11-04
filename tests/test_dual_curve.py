@@ -4,7 +4,7 @@ import pytest
 import QuantLib as ql
 
 from quanttool.config import Config
-from quanttool.market.curves import helper_repricing, to_ql_date
+from quanttool.market.curves import to_ql_date
 
 ASOF = date(2026, 10, 23)
 CAL = ql.SouthKorea(ql.SouthKorea.Settlement)
@@ -60,8 +60,6 @@ def test_dual_curve_matches_direct_quantlib(market, quotes):
         for years in [0.1, 0.5, 1, 2, 4, 7, 10]:
             assert market["KOFR"].discount(years) == pytest.approx(kofr.discount(years), abs=1e-12)
             assert market["CD91"].discount(years) == pytest.approx(cd91.discount(years), abs=1e-12)
-    for name in ["KOFR", "CD91"]:
-        assert helper_repricing(market.built[name], ASOF)["error_bp"].abs().max() < 0.01
 
 
 def test_index_forecasts_from_its_curve(market):

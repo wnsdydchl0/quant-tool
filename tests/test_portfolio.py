@@ -41,7 +41,7 @@ def test_npv_matches_direct_quantlib(book, market):
     npvs = book.npvs()
     with market.active():
         for i, t in book.trades.items():
-            direct = _direct_npv(t, ql.YieldTermStructureHandle(market.built["UST"].curve))
+            direct = _direct_npv(t, ql.YieldTermStructureHandle(market.objects["UST"].base))
             assert npvs[i] == pytest.approx(direct, rel=1e-12)
     assert npvs["UST_30Y"] < 0  # 매도
 

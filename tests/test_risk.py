@@ -19,7 +19,7 @@ def _direct_parallel(book, market, sizes):
     with market.active():
         shifted = ql.YieldTermStructureHandle(
             ql.ZeroSpreadedTermStructure(
-                ql.YieldTermStructureHandle(market.built["UST"].curve),
+                ql.YieldTermStructureHandle(market.objects["UST"].base),
                 ql.QuoteHandle(spread),
                 ql.Continuous,
                 ql.NoFrequency,
@@ -119,7 +119,7 @@ def test_theta_is_forward_forward(config, market, book):
     with evaluation_date(nxt):
         implied = ql.YieldTermStructureHandle(
             ql.ImpliedTermStructure(
-                ql.YieldTermStructureHandle(market.built["UST"].curve), to_ql_date(nxt)
+                ql.YieldTermStructureHandle(market.objects["UST"].base), to_ql_date(nxt)
             )
         )
         engine = ql.DiscountingBondEngine(implied)
