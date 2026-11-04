@@ -1,0 +1,34 @@
+# 시장 오브젝트의 컨벤션과 세팅
+
+curves:
+  UST:                                   # 미 재무부 par yield 국채 커브
+    quote_key: BOND/YIELD/USD/UST/PAR/{tenor}
+    conventions: UST
+    segments:
+      - {type: Bill, tenors: [1M, 2M, 3M, 4M, 6M, 1Y]}            # BEY → 할인채 가격
+      - {type: Bond, tenors: [2Y, 3Y, 5Y, 7Y, 10Y, 20Y, 30Y]}     # par yield = 쿠폰, 가격 100
+    interpolation: LogCubicDiscount
+    factor_tenors: [1M, 3M, 6M, 9M, 1Y, 18M, 2Y, 3Y, 4Y, 5Y, 6Y, 7Y, 8Y, 9Y, 10Y, 12Y, 15Y, 20Y, 25Y, 30Y]
+
+  KOFR:                                  # KRW 무위험 할인 커브: KOFR OIS
+    conventions: KRW_OIS
+    segments:
+      - {type: OIS, index: KOFR, quote_key: "OIS/RATE/KRW/KOFR/{tenor}", tenors: [1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]}
+    interpolation: LogLinearDiscount
+    factor_tenors: [1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]
+
+  CD91:                                  # CD91 프로젝션 커브: CD 3개월 + CD91 IRS, 스왑 할인은 KOFR (듀얼 커브)
+    conventions: KRW_IRS
+    discount_curve: KOFR
+    segments:
+      - {type: Deposit, index: CD91, quote_key: "MM/RATE/KRW/CD91/{tenor}", tenors: [3M]}
+      - {type: Swap, index: CD91, quote_key: "IRS/RATE/KRW/CD91/{tenor}", tenors: [1Y, 2Y, 3Y, 5Y, 7Y, 10Y]}
+    interpolation: LogLinearDiscount
+    factor_tenors: [3M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y]
+
+# --- 금리 지수: 예측 커브(curve)에 연결된 파생 객체 (Market.index)
+indices:
+  KOFR: {type: Overnight, fixing_days: 0, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
+         currency: KRW, curve: KOFR}
+  CD91: {type: Ibor, tenor: 3M, fixing_days: 1, calendar: SouthKorea.Settlement, day_count: Actual365Fixed,
+         bdc: ModifiedFollowing, currency: KRW, curve: CD91}

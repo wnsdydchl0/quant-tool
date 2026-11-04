@@ -1,0 +1,19 @@
+# 평가, 결제 관련 컨벤션
+UST:
+  calendar: UnitedStates.GovernmentBond
+  day_count: ActualActual.Bond       # 쿠폰 채권 (ISMA)
+  bill_day_count: Actual365Fixed     # bill bond-equivalent yield 기준
+  settlement_days: 1
+  frequency: Semiannual
+  business_day_convention: Unadjusted  # 쿠폰 일정
+  payment_convention: Unadjusted       # 수익률 관례: 명목 쿠폰일로 할인 (주말 지급 지연 무시)
+KRW_OIS: &KRW                        # KOFR OIS (고정 레그 연간)
+  calendar: SouthKorea.Settlement
+  day_count: Actual365Fixed
+  settlement_days: 1
+  frequency: Annual
+  business_day_convention: ModifiedFollowing
+  payment_convention: ModifiedFollowing
+KRW_IRS:                             # CD91 IRS: KRW_OIS와 같고 고정 레그만 분기
+  <<: *KRW
+  frequency: Quarterly
