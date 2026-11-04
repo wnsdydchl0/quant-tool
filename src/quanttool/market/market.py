@@ -8,7 +8,7 @@ from typing import Protocol
 import QuantLib as ql
 
 from ..config import Config
-from .curves import CurveFactors, build_curve, evaluation_date, to_ql_date
+from .curves import CurveFactors, build_curve, evaluation_date
 
 
 class MarketObject(Protocol):
@@ -114,7 +114,7 @@ class Market:
             o.roll(d)
 
     def _realize_fixings(self, d: date) -> None:
-        start, end = to_ql_date(self.asof), to_ql_date(d)
+        start, end = ql.Date.from_date(self.asof), ql.Date.from_date(d)
         self._saved = {}
         with self.active():
             for name, idx in self.indices.items():

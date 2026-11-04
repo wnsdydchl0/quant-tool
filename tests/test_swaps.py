@@ -6,7 +6,6 @@ import QuantLib as ql
 from quanttool import portfolio as pf
 from quanttool.analysis.risk import key_rate
 from quanttool.analysis.scenarios import parallel
-from quanttool.market.curves import to_ql_date
 from quanttool.portfolio import Portfolio
 
 ASOF = date(2026, 10, 23)
@@ -14,7 +13,7 @@ CAL = ql.SouthKorea(ql.SouthKorea.Settlement)
 
 
 def _spot():
-    d = CAL.advance(to_ql_date(ASOF), 1, ql.Days)  # CD91 fixing_days = 1
+    d = CAL.advance(ql.Date.from_date(ASOF), 1, ql.Days)  # CD91 fixing_days = 1
     return date(d.year(), d.month(), d.dayOfMonth())
 
 
@@ -46,7 +45,7 @@ def test_swap_matches_direct_quantlib(config, market, swaps):
     t = swaps.trades["IRS_5Y_PAY"]
     with market.active():
         idx = market.index("CD91")
-        start, end = to_ql_date(t.start_date), to_ql_date(t.maturity_date)
+        start, end = ql.Date.from_date(t.start_date), ql.Date.from_date(t.maturity_date)
         mf = ql.ModifiedFollowing
         fixed = ql.Schedule(start, end, ql.Period(ql.Quarterly), CAL, mf, mf,
                             ql.DateGeneration.Backward, False)  # fmt: skip
@@ -99,7 +98,7 @@ def test_theta_realizes_index_fixing_from_forward(market, swaps):
     from quanttool.analysis.risk import theta
 
     idx = market.index("CD91")
-    fix = to_ql_date(ASOF)
+    fix = ql.Date.from_date(ASOF)
     with market.active():
         forward = idx.fixing(fix, True)
     th = theta(swaps, market, date(2026, 10, 26))

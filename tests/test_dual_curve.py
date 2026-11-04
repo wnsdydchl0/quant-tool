@@ -4,7 +4,6 @@ import pytest
 import QuantLib as ql
 
 from quanttool.config import Config
-from quanttool.market.curves import to_ql_date
 
 ASOF = date(2026, 10, 23)
 CAL = ql.SouthKorea(ql.SouthKorea.Settlement)
@@ -13,7 +12,7 @@ DC = ql.Actual365Fixed()
 
 def _direct(q):
     """KOFR OIS 커브와 CD91 듀얼 커브를 QuantLib 헬퍼로 직접 조립."""
-    today = to_ql_date(ASOF)
+    today = ql.Date.from_date(ASOF)
     ql.Settings.instance().evaluationDate = today
     kofr_idx = ql.OvernightIndex("KOFR", 0, ql.KRWCurrency(), CAL, DC)
     ois = [

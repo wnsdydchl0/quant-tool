@@ -6,7 +6,7 @@ import QuantLib as ql
 
 from quanttool.config import load_config
 from quanttool.market import build_market
-from quanttool.market.curves import bill_price, to_ql_date
+from quanttool.market.curves import bill_price
 from quanttool.market.quotes import read_quotes
 
 ASOF = date(2026, 10, 23)
@@ -51,7 +51,7 @@ def _direct_curve(config, q: dict):
     """같은 커브를 표준 QuantLib 헬퍼로 직접 조립 (par bond = FixedRateBondHelper 가격 100)."""
     conv = config.conventions["UST"]
     cal, dc = conv.ql_calendar(), conv.ql_day_count()
-    today = to_ql_date(ASOF)
+    today = ql.Date.from_date(ASOF)
     settle = cal.advance(today, 1, ql.Days)
     helpers = []
     for seg in config.curves["UST"].segments:
@@ -98,7 +98,7 @@ def test_frozen_curve_ignores_quotes_and_dates(config, quotes, market):
     with __import__("quanttool.market.curves", fromlist=["x"]).evaluation_date(
         date(2027, 1, 1)
     ):  # 평가일을 옮겨도
-        assert market["UST"].referenceDate() == to_ql_date(ASOF)
+        assert market["UST"].referenceDate() == ql.Date.from_date(ASOF)
         assert market["UST"].discount(d) == before
 
 
@@ -162,11 +162,11 @@ def test_roll_is_forward_forward(market):
     nxt = date(2026, 10, 26)
     market.roll(nxt)
     with market.active():
-        assert market["UST"].referenceDate() == to_ql_date(nxt)
+        assert market["UST"].referenceDate() == ql.Date.from_date(nxt)
         implied = ql.ImpliedTermStructure(
-            ql.YieldTermStructureHandle(market.objects["UST"].base), to_ql_date(nxt)
+            ql.YieldTermStructureHandle(market.objects["UST"].base), ql.Date.from_date(nxt)
         )
         for t in [0.5, 5.0, 25.0]:
             assert market["UST"].discount(t) == pytest.approx(implied.discount(t), abs=1e-14)
     market.roll(ASOF)
-    assert market["UST"].referenceDate() == to_ql_date(ASOF)
+    assert market["UST"].referenceDate() == ql.Date.from_date(ASOF)

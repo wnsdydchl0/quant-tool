@@ -26,7 +26,6 @@ from pydantic import BaseModel, ConfigDict
 
 from .config import Config
 from .market import Market
-from .market.curves import to_ql_date
 
 
 class Trade(BaseModel):
@@ -65,8 +64,8 @@ class Bond(Trade):
 
 def build_bond(t: Bond, market: Market, cfg: Config) -> ql.Bond:
     conv = cfg.conventions[t.conventions]
-    issue = to_ql_date(t.issue_date)
-    schedule = ql.Schedule(issue, to_ql_date(t.maturity_date), ql.Period(conv.ql_frequency()),
+    issue, maturity = ql.Date.from_date(t.issue_date), ql.Date.from_date(t.maturity_date)
+    schedule = ql.Schedule(issue, maturity, ql.Period(conv.ql_frequency()),
                            conv.ql_calendar(), conv.ql_bdc(), conv.ql_bdc(),
                            ql.DateGeneration.Backward, False)  # fmt: skip
     return ql.FixedRateBond(conv.settlement_days, 100.0, schedule, [t.coupon],
@@ -96,7 +95,7 @@ class IRSwap(Trade):
 def build_irswap(t: IRSwap, market: Market, cfg: Config) -> ql.VanillaSwap:
     conv = cfg.conventions[t.conventions]
     index = market.index(t.index)
-    start, end = to_ql_date(t.start_date), to_ql_date(t.maturity_date)
+    start, end = ql.Date.from_date(t.start_date), ql.Date.from_date(t.maturity_date)
     bdc = conv.ql_bdc()
     fixed = ql.Schedule(start, end, ql.Period(conv.ql_frequency()), conv.ql_calendar(), bdc, bdc,
                         ql.DateGeneration.Backward, False)  # fmt: skip

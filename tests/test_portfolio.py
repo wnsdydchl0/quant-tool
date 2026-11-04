@@ -4,7 +4,6 @@ import pytest
 import QuantLib as ql
 
 from quanttool.market import build_market
-from quanttool.market.curves import to_ql_date
 from quanttool.portfolio import Portfolio, trade
 
 ASOF = date(2026, 10, 23)
@@ -14,8 +13,8 @@ def _direct_npv(t, curve) -> float:
     """QuantLib으로 직접 조립한 같은 채권의 NPV × 포지션."""
     cal = ql.UnitedStates(ql.UnitedStates.GovernmentBond)
     sch = ql.Schedule(
-        to_ql_date(t.issue_date),
-        to_ql_date(t.maturity_date),
+        ql.Date.from_date(t.issue_date),
+        ql.Date.from_date(t.maturity_date),
         ql.Period(ql.Semiannual),
         cal,
         ql.Unadjusted,
@@ -31,7 +30,7 @@ def _direct_npv(t, curve) -> float:
         ql.ActualActual(ql.ActualActual.Bond),
         ql.Unadjusted,
         100.0,
-        to_ql_date(t.issue_date),
+        ql.Date.from_date(t.issue_date),
     )
     bond.setPricingEngine(ql.DiscountingBondEngine(curve))
     return bond.NPV() * t.notional / 100.0

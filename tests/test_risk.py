@@ -6,7 +6,7 @@ import QuantLib as ql
 from quanttool.analysis.risk import cross_gamma, factor_delta, key_rate, scenario_pnl, theta
 from quanttool.analysis.scenarios import bucket, combine, from_loadings, parallel, triangle_weight
 from quanttool.config import Override
-from quanttool.market.curves import DC, to_ql_date
+from quanttool.market.curves import DC
 
 ASOF = date(2026, 10, 23)
 BP = 1e-4
@@ -119,7 +119,7 @@ def test_theta_is_forward_forward(config, market, book):
     with evaluation_date(nxt):
         implied = ql.YieldTermStructureHandle(
             ql.ImpliedTermStructure(
-                ql.YieldTermStructureHandle(market.objects["UST"].base), to_ql_date(nxt)
+                ql.YieldTermStructureHandle(market.objects["UST"].base), ql.Date.from_date(nxt)
             )
         )
         engine = ql.DiscountingBondEngine(implied)

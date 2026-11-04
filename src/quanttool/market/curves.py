@@ -29,16 +29,12 @@ _CURVES = {
 DC = ql.Actual365Fixed()  # 커브 시간·제로금리 표시 기준
 
 
-def to_ql_date(d: date) -> ql.Date:
-    return ql.Date(d.day, d.month, d.year)
-
-
 @contextmanager
 def evaluation_date(d: date) -> Iterator[None]:
     """전역 Settings.evaluationDate를 d로 두고, 끝나면 되돌린다."""
     settings = ql.Settings.instance()
     previous = settings.evaluationDate
-    settings.evaluationDate = to_ql_date(d)
+    settings.evaluationDate = ql.Date.from_date(d)
     try:
         yield
     finally:
@@ -93,7 +89,7 @@ def build_curve(
         ic = indices[name]
         return ic.make(name) if ic.curve == cfg.name else ic.make(name, curves[ic.curve])
 
-    today = to_ql_date(asof)
+    today = ql.Date.from_date(asof)
     cal = conv.ql_calendar()
     with evaluation_date(asof):  # 헬퍼 결제일 계산이 평가일을 쓴다
         discount = (
@@ -231,6 +227,8 @@ class CurveFactors:
         if d == self.asof:
             self._base_link.linkTo(self.base)
         else:
-            rolled = ql.ImpliedTermStructure(ql.YieldTermStructureHandle(self.base), to_ql_date(d))
+            rolled = ql.ImpliedTermStructure(
+                ql.YieldTermStructureHandle(self.base), ql.Date.from_date(d)
+            )
             rolled.enableExtrapolation()
             self._base_link.linkTo(rolled)
